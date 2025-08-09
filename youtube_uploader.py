@@ -5,6 +5,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import json
 import os
+import traceback
 from config import Config
 
 class YouTubeUploader:
@@ -15,22 +16,48 @@ class YouTubeUploader:
             try:
                 cookies = json.loads(Config.YT_COOKIES)
                 for cookie in cookies:
+                    # حذف expiry چون Selenium ممکنه ایراد بگیره
                     if 'expiry' in cookie:
                         del cookie['expiry']
                     driver.add_cookie(cookie)
+                print("[INFO] Cookies loaded successfully.")
                 return True
             except Exception as e:
-                print(f"Error loading cookies: {e}")
+                print(f"[ERROR] Loading cookies failed: {e}")
+                print(traceback.format_exc())
+        else:
+            print("[WARN] No YT_COOKIES found in config.")
         return False
+
+    @staticmethod
+    def check_login(driver):
+        """بررسی اینکه آیا کاربر لاگین شده یا نه"""
+        try:
+            driver.get("https://www.youtube.com")
+            time.sleep(5)  # اجازه بارگذاری کامل صفحه
+            page_source = driver.page_source.lower()
+            # چند روش برای چک لاگین:
+            if "sign in" in page_source or "ورود" in page_source:
+                print("[ERROR] User is NOT logged in after loading cookies!")
+                return False
+            print("[INFO] User logged in successfully.")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Exception during login check: {e}")
+            print(traceback.format_exc())
+            return False
 
     @staticmethod
     def upload_shorts(video_path, title, description):
         for attempt in range(Config.MAX_RETRIES):
+            driver = None
             try:
-                # تنظیمات کروم
+                print(f"[INFO] Upload attempt {attempt + 1} started.")
                 options = webdriver.ChromeOptions()
-                # در صورت تست اولیه، headless رو غیرفعال کن
+
+                # headless برای دیباگ فعلا غیرفعال باشه
                 # options.add_argument("--headless=new")
+
                 options.add_argument("--no-sandbox")
                 options.add_argument("--disable-dev-shm-usage")
                 options.add_argument("--disable-gpu")
@@ -41,22 +68,34 @@ class YouTubeUploader:
                 )
 
                 driver = webdriver.Chrome(options=options)
+
+                # رفتن به یوتیوب و بارگذاری کوکی
                 driver.get("https://www.youtube.com")
-
-                # بارگذاری کوکی‌ها
+                time.sleep(3)
                 if YouTubeUploader.load_cookies(driver):
-                    driver.get("https://www.youtube.com")  # رفرش برای فعال شدن کوکی‌ها
+                    driver.refresh()
+                    time.sleep(5)
+                else:
+                    print("[WARN] Continuing without cookies loaded.")
 
-                # رفتن به صفحه آپلود
+                if not YouTubeUploader.check_login(driver):
+                    print("[ERROR] Login failed, aborting upload.")
+                    return False
+
+                # رفتن به صفحه آپلود شورتز
+                print("[INFO] Navigating to upload page...")
                 driver.get(Config.YT_UPLOAD_URL)
 
-                # انتخاب ورودی فایل و آپلود ویدیو
-                WebDriverWait(driver, 30).until(
+                # آپلود فایل ویدیو
+                file_input = WebDriverWait(driver, 30).until(
                     EC.presence_of_element_located((By.XPATH, '//input[@type="file"]'))
-                ).send_keys(os.path.abspath(video_path))
+                )
+                file_input.send_keys(os.path.abspath(video_path))
+                print("[INFO] Video file sent to input element.")
+                time.sleep(10)  # زمان برای آپلود اولیه
 
-                print("⏳ در حال آپلود و پردازش ویدیو...")
-                time.sleep(10)
+                # اسکرین‌شات برای دیباگ
+                driver.save_screenshot(f"debug_uploaded_{attempt+1}.png")
 
                 # تنظیم عنوان
                 try:
@@ -65,10 +104,13 @@ class YouTubeUploader:
                             By.CSS_SELECTOR, "div[aria-label='عنوان'], div[aria-label='Title']"
                         ))
                     )
+                    title_field.click()
                     title_field.clear()
                     title_field.send_keys(title)
-                except Exception:
-                    print("⚠️ فیلد عنوان پیدا نشد، احتمالاً زبان یا DOM متفاوت است.")
+                    print("[INFO] Title set successfully.")
+                except Exception as e:
+                    print(f"[WARN] Title field not found or could not be set: {e}")
+                    print(traceback.format_exc())
 
                 # تنظیم توضیحات
                 try:
@@ -77,39 +119,57 @@ class YouTubeUploader:
                             By.CSS_SELECTOR, "div[aria-label='توضیحات'], div[aria-label='Description']"
                         ))
                     )
+                    description_field.click()
                     description_field.clear()
                     description_field.send_keys(description)
-                except Exception:
-                    print("⚠️ فیلد توضیحات پیدا نشد، احتمالاً زبان یا DOM متفاوت است.")
+                    print("[INFO] Description set successfully.")
+                except Exception as e:
+                    print(f"[WARN] Description field not found or could not be set: {e}")
+                    print(traceback.format_exc())
 
-                # رد کردن مراحل و انتشار
-                for _ in range(3):  # سه بار "بعدی" بزن
+                # کلیک روی دکمه‌های بعدی (Next) سه بار
+                for i in range(3):
                     try:
                         next_btn = WebDriverWait(driver, 30).until(
                             EC.element_to_be_clickable((By.XPATH, "//ytcp-button[@id='next-button']"))
                         )
                         next_btn.click()
-                        time.sleep(1)
-                    except:
+                        print(f"[INFO] Clicked 'Next' button #{i+1}")
+                        time.sleep(2)
+                    except Exception as e:
+                        print(f"[WARN] Could not click 'Next' button #{i+1}: {e}")
                         break
 
-                # دکمه انتشار
-                publish_button = WebDriverWait(driver, 30).until(
-                    EC.element_to_be_clickable((By.XPATH, "//ytcp-button[@id='done-button']"))
-                )
-                publish_button.click()
+                # کلیک روی دکمه انتشار (Done)
+                try:
+                    publish_button = WebDriverWait(driver, 30).until(
+                        EC.element_to_be_clickable((By.XPATH, "//ytcp-button[@id='done-button']"))
+                    )
+                    publish_button.click()
+                    print("[INFO] Publish button clicked.")
+                except Exception as e:
+                    print(f"[ERROR] Could not click Publish button: {e}")
+                    print(traceback.format_exc())
+                    return False
 
-                print("✅ ویدیو منتشر شد!")
+                # اسکرین‌شات پس از انتشار برای تایید
                 time.sleep(5)
+                driver.save_screenshot(f"debug_after_publish_{attempt+1}.png")
+
+                print("✅ Video uploaded and published successfully!")
                 return True
 
             except Exception as e:
-                print(f"❌ Attempt {attempt + 1} failed: {e}")
+                print(f"[ERROR] Attempt {attempt + 1} failed with exception: {e}")
+                print(traceback.format_exc())
                 time.sleep(10)
-            finally:
-                try:
-                    driver.quit()
-                except:
-                    pass
 
+            finally:
+                if driver:
+                    try:
+                        driver.quit()
+                    except Exception:
+                        pass
+
+        print("[ERROR] All upload attempts failed.")
         return False
