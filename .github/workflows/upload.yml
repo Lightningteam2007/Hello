@@ -2,40 +2,51 @@ name: YouTube Shorts Auto-Uploader
 
 on:
   schedule:
-    - cron: "0 */8 * * *"  # هر 8 ساعت یکبار
+    - cron: "0 */8 * * *"  # هر 8 ساعت یکبار اجرا شود
   workflow_dispatch:
 
 jobs:
   upload:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-          
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y chromium-browser chromium-chromedriver ffmpeg
-          
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install yt-dlp
-          
-      - name: Run uploader
-        run: |
-          python main.py
+
+      - name: Run uploader script
         env:
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
-          
-      - name: Clean up
+          CHANNEL_URL: ${{ secrets.CHANNEL_URL }}
+          OUTPUT_DIR: "processed_videos"
+          MAX_RETRIES: "3"
+          DELAY_BETWEEN_UPLOADS: "28800"  # 8 hours in seconds
+          DEFAULT_TAGS: "شورت,طنز,میم,سرگرمی,ایرانی"
+          CONTACT_INFO: |
+            📌 پیج اینستاگرام: @example
+            🌐 وبسایت: example.com
         run: |
+          set -e  # توقف در صورت خطا
+          echo "Starting YouTube Shorts Auto-Uploader..."
+          python main.py
+
+      - name: Cleanup temp files
+        run: |
+          echo "Cleaning up temporary files..."
           rm -rf processed_videos
           rm -f temp_video.mp4
