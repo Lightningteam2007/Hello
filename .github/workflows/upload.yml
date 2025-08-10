@@ -5,60 +5,71 @@ on:
     - cron: "0 */8 * * *"  # هر 8 ساعت اجرا شود
   workflow_dispatch:  # امکان اجرای دستی
 
+env:
+  PYTHONUNBUFFERED: 1  # نمایش لحظه‌ای لاگ‌ها
+  PIP_DISABLE_PIP_VERSION_CHECK: 1  # غیرفعال کردن چک نسخه pip
+
 jobs:
   upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # محدودیت زمانی برای جلوگیری از اجرای بی‌پایان
+    timeout-minutes: 45  # افزایش زمان اجرا
+    
     steps:
       - uses: actions/checkout@v4
       
-      - name: نصب پایتون
+      - name: تنظیم پایتون 3.10
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+          cache: 'pip'  # فعالسازی کش برای pip
           
       - name: نصب پیش‌نیازهای سیستم
         run: |
-          sudo apt-get update
+          sudo apt-get update -y
           sudo apt-get install -y \
             ffmpeg \
+            libgl1-mesa-glx \
+            libxcb-xinerama0 \
             chromium-browser \
-            chromium-chromedriver \
-            libgl1  # مورد نیاز برای پردازش تصاویر Pillow
+            chromium-chromedriver
           sudo rm -rf /var/lib/apt/lists/*
           
-      - name: نصب کتابخانه‌های پایتون
+      - name: نصب وابستگی‌های پایتون
         run: |
           python -m pip install --upgrade pip
-          pip install --upgrade -r requirements.txt
+          pip install --force-reinstall -r requirements.txt
           sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
           sudo chmod a+rx /usr/local/bin/yt-dlp
           
-      - name: بررسی نصب‌ها
+      - name: بررسی نسخه‌ها
         run: |
-          ffmpeg -version
+          echo "### نسخه‌های نصب شده ###"
+          ffmpeg -version | head -n 1
           yt-dlp --version
-          python -c "import PIL; print(f'نسخه Pillow: {PIL.__version__}')"
+          python -c "import PIL; print(f'Pillow: {PIL.__version__}')"
+          python -c "import moviepy; print(f'MoviePy: {moviepy.__version__}')"
           
-      - name: اجرای آپلودر
+      - name: ایجاد ساختار دایرکتوری
+        run: |
+          mkdir -p downloaded_videos processed_videos
+          echo "ساختار دایرکتوری ایجاد شد"
+          
+      - name: اجرای اسکریپت اصلی
         env:
           CHANNEL_USERNAME: ${{ secrets.CHANNEL_USERNAME }}
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
-          PYTHONUNBUFFERED: 1  # برای نمایش لحظه‌ای لاگ‌ها
         run: |
-          # ساخت دایرکتوری‌های مورد نیاز
-          mkdir -p downloaded_videos processed_videos
+          # افزایش زمان اجرا و مدیریت خطاها
+          timeout 30m python main.py || (echo "خطا در اجرای اسکریپت" && exit 1)
           
-          # اجرا با محدودیت زمانی
-          timeout 25m python main.py || (echo "❌ خطا در اجرای اسکریپت!" && exit 1)
-          
-      - name: آپلود اطلاعات خطا
+      - name: ذخیره لاگ‌های خطا
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-data-${{ github.run_id }}  # نام یکتا برای هر اجرا
+          name: error-logs-${{ github.run_number }}
           path: |
-            error_attempt_*.png
             *.log
+            error_attempt_*.png
             downloaded_videos/
             processed_videos/
+          retention-days: 3  # نگهداری لاگ‌ها به مدت 3 روز
