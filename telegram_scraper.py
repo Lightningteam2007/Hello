@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import time
 import traceback
+import os
+import requests
 from config import Config
 
 class TelegramScraper:
@@ -79,5 +81,28 @@ class TelegramScraper:
             
         except Exception as e:
             print(f"❌ خطا در دریافت محتوا: {str(e)}")
+            print(traceback.format_exc())
+            return None
+
+    @staticmethod
+    def download_video(video_url, output_dir="downloaded_videos"):
+        """دانلود ویدیو از تلگرام و ذخیره به صورت محلی"""
+        os.makedirs(output_dir, exist_ok=True)
+        filename = os.path.join(output_dir, f"video_{int(time.time())}.mp4")
+        
+        try:
+            print(f"⬇️ در حال دانلود ویدیو از: {video_url}")
+            scraper = cloudscraper.create_scraper()
+            response = scraper.get(video_url, stream=True)
+            response.raise_for_status()
+            
+            with open(filename, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            print(f"✅ ویدیو با موفقیت دانلود شد: {filename}")
+            return filename
+        except Exception as e:
+            print(f"❌ خطا در دانلود ویدیو: {str(e)}")
             print(traceback.format_exc())
             return None
