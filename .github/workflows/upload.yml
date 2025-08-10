@@ -2,17 +2,13 @@ name: آپلود خودکار یوتیوب شورت
 
 on:
   schedule:
-    - cron: "0 */8 * * *"  # هر 8 ساعت اجرا شود
-  workflow_dispatch:  # امکان اجرای دستی
-
-env:
-  PYTHONUNBUFFERED: 1  # نمایش لحظه‌ای لاگ‌ها
-  PIP_DISABLE_PIP_VERSION_CHECK: 1  # غیرفعال کردن چک نسخه pip
+    - cron: "0 */8 * * *"
+  workflow_dispatch:
 
 jobs:
   upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # افزایش زمان اجرا
+    timeout-minutes: 60
     
     steps:
       - uses: actions/checkout@v4
@@ -21,14 +17,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-          cache: 'pip'  # فعالسازی کش برای pip
+          cache: 'pip'
           
       - name: نصب پیش‌نیازهای سیستم
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \
             ffmpeg \
-            libgl1-mesa-glx \
+            libgl1 \
+            libglx0 \
+            libopengl0 \
+            libegl1 \
             libxcb-xinerama0 \
             chromium-browser \
             chromium-chromedriver
@@ -49,18 +48,13 @@ jobs:
           python -c "import PIL; print(f'Pillow: {PIL.__version__}')"
           python -c "import moviepy; print(f'MoviePy: {moviepy.__version__}')"
           
-      - name: ایجاد ساختار دایرکتوری
-        run: |
-          mkdir -p downloaded_videos processed_videos
-          echo "ساختار دایرکتوری ایجاد شد"
-          
       - name: اجرای اسکریپت اصلی
         env:
           CHANNEL_USERNAME: ${{ secrets.CHANNEL_USERNAME }}
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
         run: |
-          # افزایش زمان اجرا و مدیریت خطاها
-          timeout 30m python main.py || (echo "خطا در اجرای اسکریپت" && exit 1)
+          mkdir -p downloaded_videos processed_videos
+          timeout 45m python main.py || (echo "خطا در اجرای اسکریپت" && exit 1)
           
       - name: ذخیره لاگ‌های خطا
         if: failure()
@@ -72,4 +66,3 @@ jobs:
             error_attempt_*.png
             downloaded_videos/
             processed_videos/
-          retention-days: 3  # نگهداری لاگ‌ها به مدت 3 روز
