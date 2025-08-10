@@ -3,12 +3,19 @@ from moviepy.editor import VideoFileClip, CompositeVideoClip, ColorClip
 import traceback
 import subprocess
 from config import Config
-from PIL import Image, ImageFilter  # اضافه کردن importهای لازم
+from PIL import Image, ImageFilter
+
+# راه‌حل جایگزین برای ANTIALIAS
+try:
+    from PIL.Image import Resampling
+    ANTIALIAS = Resampling.LANCZOS
+except ImportError:
+    ANTIALIAS = Image.ANTIALIAS  # برای نسخه‌های قدیمی
 
 class VideoProcessor:
     @staticmethod
     def validate_video_file(input_path):
-        """بررسی صحت فایل ویدیو قبل از پردازش"""
+        """بررسی صحت فایل ویدیو"""
         try:
             if not os.path.exists(input_path):
                 raise FileNotFoundError(f"فایل ویدیو یافت نشد: {input_path}")
@@ -17,18 +24,12 @@ class VideoProcessor:
                 raise ValueError("فایل ویدیو خالی است!")
             
             cmd = ['ffprobe', '-v', 'error', '-i', input_path]
-            result = subprocess.run(
-                cmd,
-                stderr=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                timeout=10
-            )
+            result = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, timeout=10)
             
             if result.returncode != 0:
                 raise ValueError(f"فایل ویدیو نامعتبر است: {result.stderr.decode()}")
             
             return True
-            
         except Exception as e:
             print(f"❌ خطا در بررسی فایل ویدیو: {str(e)}")
             return False
@@ -38,24 +39,19 @@ class VideoProcessor:
         print(f"⚙️ در حال پردازش ویدیو: {input_path}")
         
         try:
-            # 1. بررسی صحت فایل
             if not VideoProcessor.validate_video_file(input_path):
                 raise ValueError("فایل ویدیو نامعتبر است")
             
-            # 2. ایجاد دایرکتوری خروجی
             os.makedirs(Config.OUTPUT_DIR, exist_ok=True)
-            output_name = f"processed_{os.path.basename(input_path)}"
-            output_path = os.path.join(Config.OUTPUT_DIR, output_name)
+            output_path = os.path.join(Config.OUTPUT_DIR, f"processed_{os.path.basename(input_path)}")
             
-            # 3. پردازش ویدیو
             clip = VideoFileClip(input_path)
             print(f"📏 اندازه اصلی: {clip.w}x{clip.h}, مدت: {clip.duration}ثانیه")
             
-            # 4. محاسبه نسبت ابعاد
+            # پردازش نسبت ابعاد
             target_ratio = 9 / 16
             current_ratio = clip.w / clip.h
             
-            # 5. اضافه کردن حاشیه سیاه
             if abs(current_ratio - target_ratio) < 0.01:
                 processed_clip = clip
                 print("🔵 نسبت ابعاد مناسب است - بدون تغییر")
@@ -76,20 +72,14 @@ class VideoProcessor:
                 ], size=(new_width, clip.h))
                 print("🔲 حاشیه افقی اضافه شد")
             
-            # 6. تغییر اندازه ویدیو با روش سازگار
+            # تغییر اندازه با روش سازگار
             try:
                 # روش جدید برای نسخه‌های جدید Pillow
-                from PIL.Image import Resampling
                 processed_clip = processed_clip.resize(height=Config.TARGET_HEIGHT)
-            except:
-                # روش جایگزین برای نسخه‌های قدیمی
-                try:
-                    processed_clip = processed_clip.resize(height=Config.TARGET_HEIGHT)
-                except Exception as e:
-                    print(f"⚠️ خطا در تغییر اندازه ویدیو: {e}")
-                    raise
+            except Exception as e:
+                print(f"⚠️ خطا در تغییر اندازه: {e}")
+                raise
             
-            # 7. ذخیره ویدیو
             processed_clip.write_videofile(
                 output_path,
                 codec="libx264",
