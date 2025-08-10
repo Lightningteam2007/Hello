@@ -6,4 +6,5 @@ beautifulsoup4==4.12.2
 python-dotenv==1.0.0
 yt-dlp==2023.11.16
 ffmpeg-python==0.2.0
-pillow==10.0.0  # نسخه پایدار جدید
+pillow==10.1.0  # نسخه پایدار جدید
+opencv-python-headless==4.8.1.78
