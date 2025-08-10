@@ -3,6 +3,7 @@ from moviepy.editor import VideoFileClip, CompositeVideoClip, ColorClip
 import traceback
 import subprocess
 from config import Config
+from PIL import Image  # اضافه کردن این import
 
 class VideoProcessor:
     @staticmethod
@@ -15,8 +16,7 @@ class VideoProcessor:
             if os.path.getsize(input_path) == 0:
                 raise ValueError("فایل ویدیو خالی است!")
             
-            # بررسی با FFprobe
-            cmd = ['ffprobe', '-v', 'error', '-i', input_path, '-show_format', '-show_streams']
+            cmd = ['ffprobe', '-v', 'error', '-i', input_path]
             result = subprocess.run(
                 cmd,
                 stderr=subprocess.PIPE,
@@ -25,14 +25,10 @@ class VideoProcessor:
             )
             
             if result.returncode != 0:
-                error_msg = result.stderr.decode().strip()
-                raise ValueError(f"فایل ویدیو نامعتبر است: {error_msg}")
+                raise ValueError(f"فایل ویدیو نامعتبر است: {result.stderr.decode()}")
             
             return True
             
-        except subprocess.TimeoutExpired:
-            print("⏳ زمان بررسی فایل به پایان رسید")
-            return False
         except Exception as e:
             print(f"❌ خطا در بررسی فایل ویدیو: {str(e)}")
             return False
@@ -80,8 +76,14 @@ class VideoProcessor:
                 ], size=(new_width, clip.h))
                 print("🔲 حاشیه افقی اضافه شد")
             
-            # 6. ذخیره ویدیو
-            processed_clip = processed_clip.resize(height=Config.TARGET_HEIGHT)
+            # 6. ذخیره ویدیو با روش جدید resize
+            try:
+                # روش جدید برای نسخه‌های جدید Pillow
+                processed_clip = processed_clip.resize(height=Config.TARGET_HEIGHT, method='bilinear')
+            except:
+                # روش جایگزین برای سازگاری با نسخه‌های قدیمی
+                processed_clip = processed_clip.resize(lambda t: Config.TARGET_HEIGHT)
+            
             processed_clip.write_videofile(
                 output_path,
                 codec="libx264",
