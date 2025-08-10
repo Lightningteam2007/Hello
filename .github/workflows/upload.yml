@@ -1,62 +1,62 @@
-name: YouTube Shorts Auto-Uploader
+name: آپلود خودکار یوتیوب شورت
 
 on:
   schedule:
-    - cron: "0 */8 * * *"  # Runs every 8 hours
-  workflow_dispatch:  # Allows manual triggering
+    - cron: "0 */8 * * *"  # هر 8 ساعت اجرا شود
+  workflow_dispatch:  # امکان اجرای دستی
 
 jobs:
   upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # Set timeout to prevent hanging
+    timeout-minutes: 30  # محدودیت زمانی برای جلوگیری از اجرای بی‌پایان
     steps:
       - uses: actions/checkout@v4
       
-      - name: Set up Python
+      - name: نصب پایتون
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
           
-      - name: Install system dependencies
+      - name: نصب پیش‌نیازهای سیستم
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             ffmpeg \
             chromium-browser \
             chromium-chromedriver \
-            libgl1  # Required for Pillow image processing
+            libgl1  # مورد نیاز برای پردازش تصاویر Pillow
           sudo rm -rf /var/lib/apt/lists/*
           
-      - name: Install Python dependencies
+      - name: نصب کتابخانه‌های پایتون
         run: |
           python -m pip install --upgrade pip
           pip install --upgrade -r requirements.txt
           sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
           sudo chmod a+rx /usr/local/bin/yt-dlp
           
-      - name: Verify installations
+      - name: بررسی نصب‌ها
         run: |
           ffmpeg -version
           yt-dlp --version
-          python -c "import PIL; print(f'Pillow version: {PIL.__version__}')"
+          python -c "import PIL; print(f'نسخه Pillow: {PIL.__version__}')"
           
-      - name: Run Uploader
+      - name: اجرای آپلودر
         env:
           CHANNEL_USERNAME: ${{ secrets.CHANNEL_USERNAME }}
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
-          PYTHONUNBUFFERED: 1  # For real-time logging
+          PYTHONUNBUFFERED: 1  # برای نمایش لحظه‌ای لاگ‌ها
         run: |
-          # Create necessary directories
+          # ساخت دایرکتوری‌های مورد نیاز
           mkdir -p downloaded_videos processed_videos
           
-          # Run with timeout and log output
-          timeout 25m python main.py || (echo "❌ Script failed!" && exit 1)
+          # اجرا با محدودیت زمانی
+          timeout 25m python main.py || (echo "❌ خطا در اجرای اسکریپت!" && exit 1)
           
-      - name: Upload debug data
+      - name: آپلود اطلاعات خطا
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-data-${{ github.run_id }}
+          name: debug-data-${{ github.run_id }}  # نام یکتا برای هر اجرا
           path: |
             error_attempt_*.png
             *.log
