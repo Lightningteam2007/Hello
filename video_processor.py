@@ -3,7 +3,7 @@ from moviepy.editor import VideoFileClip, CompositeVideoClip, ColorClip
 import traceback
 import subprocess
 from config import Config
-from PIL import Image  # اضافه کردن این import
+from PIL import Image, ImageFilter  # اضافه کردن importهای لازم
 
 class VideoProcessor:
     @staticmethod
@@ -76,13 +76,18 @@ class VideoProcessor:
                 ], size=(new_width, clip.h))
                 print("🔲 حاشیه افقی اضافه شد")
             
-            # 6. ذخیره ویدیو با روش جدید resize
+            # 6. ذخیره ویدیو با روش سازگار با نسخه‌های جدید Pillow
             try:
                 # روش جدید برای نسخه‌های جدید Pillow
-                processed_clip = processed_clip.resize(height=Config.TARGET_HEIGHT, method='bilinear')
+                from PIL.Image import Resampling
+                processed_clip = processed_clip.resize(height=Config.TARGET_HEIGHT)
             except:
-                # روش جایگزین برای سازگاری با نسخه‌های قدیمی
-                processed_clip = processed_clip.resize(lambda t: Config.TARGET_HEIGHT)
+                # روش جایگزین برای نسخه‌های قدیمی
+                try:
+                    processed_clip = processed_clip.resize(height=Config.TARGET_HEIGHT)
+                except Exception as e:
+                    print(f"⚠️ خطا در تغییر اندازه ویدیو: {e}")
+                    raise
             
             processed_clip.write_videofile(
                 output_path,
