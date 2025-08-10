@@ -33,12 +33,14 @@ def main():
                     print("❌ ویدیویی یافت نشد. خروج...")
                     return
                 
-                # 2. دانلود ویدیو
+                # 2. دانلود ویدیو با تأخیر قبل از پردازش
                 print(f"📥 در حال دانلود ویدیو از تلگرام...")
                 video_path = TelegramScraper.download_video(video_info['url'])
                 if not video_path:
                     print("❌ دانلود ویدیو ناموفق بود. خروج...")
                     continue
+                
+                time.sleep(2)  # تأخیر برای اطمینان از کامل شدن نوشتن فایل
                 
                 # 3. پردازش ویدیو
                 print(f"🔄 در حال پردازش ویدیو...")
