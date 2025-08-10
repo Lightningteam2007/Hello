@@ -86,33 +86,56 @@ class TelegramScraper:
         try:
             print(f"⬇️ در حال دانلود ویدیو از: {video_url}")
             
-            # استفاده از ffmpeg برای دانلود مستقیم با کنترل کیفیت
-            cmd = [
-                'ffmpeg',
-                '-i', video_url,
-                '-c', 'copy',
-                '-movflags', 'faststart',
-                filename
-            ]
-            
-            result = subprocess.run(
-                cmd,
-                stderr=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                text=True,
-                timeout=300
-            )
-            
-            if result.returncode != 0:
-                raise RuntimeError(f"خطای FFmpeg: {result.stderr}")
-            
-            # بررسی صحت فایل
-            if not os.path.exists(filename) or os.path.getsize(filename) == 0:
-                raise ValueError("فایل دانلود شده نامعتبر است!")
-            
-            print(f"✅ ویدیو با موفقیت دانلود شد: {filename}")
-            return filename
-            
+            # روش اول: استفاده از cloudscraper
+            try:
+                scraper = cloudscraper.create_scraper()
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': 'https://t.me/',
+                    'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5'
+                }
+                
+                with scraper.get(video_url, headers=headers, stream=True, timeout=30) as response:
+                    response.raise_for_status()
+                    
+                    with open(filename, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                
+                # بررسی صحت فایل
+                if os.path.getsize(filename) == 0:
+                    raise ValueError("فایل دانلود شده خالی است!")
+                    
+                print(f"✅ ویدیو با موفقیت دانلود شد: {filename}")
+                return filename
+            except Exception as e:
+                print(f"⚠️ خطا در روش اول دانلود: {e}")
+                if os.path.exists(filename):
+                    os.remove(filename)
+                
+                # روش دوم: استفاده از yt-dlp
+                try:
+                    import yt_dlp
+                    ydl_opts = {
+                        'outtmpl': filename,
+                        'quiet': True,
+                        'no_warnings': True,
+                        'format': 'best',
+                        'extract_flat': False
+                    }
+                    
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([video_url])
+                    
+                    if not os.path.exists(filename) or os.path.getsize(filename) == 0:
+                        raise ValueError("فایل دانلود شده نامعتبر است!")
+                        
+                    print(f"✅ ویدیو با yt-dlp دانلود شد: {filename}")
+                    return filename
+                except Exception as e:
+                    print(f"⚠️ خطا در روش دوم دانلود: {e}")
+                    raise
+                    
         except Exception as e:
             print(f"❌ خطا در دانلود ویدیو: {str(e)}")
             if os.path.exists(filename):
