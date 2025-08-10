@@ -76,7 +76,7 @@ class VideoProcessor:
                 ], size=(new_width, clip.h))
                 print("🔲 حاشیه افقی اضافه شد")
             
-            # 6. ذخیره ویدیو با روش سازگار با نسخه‌های جدید Pillow
+            # 6. تغییر اندازه ویدیو با روش سازگار
             try:
                 # روش جدید برای نسخه‌های جدید Pillow
                 from PIL.Image import Resampling
@@ -89,6 +89,7 @@ class VideoProcessor:
                     print(f"⚠️ خطا در تغییر اندازه ویدیو: {e}")
                     raise
             
+            # 7. ذخیره ویدیو
             processed_clip.write_videofile(
                 output_path,
                 codec="libx264",
