@@ -7,11 +7,10 @@ from config import Config
 class TelegramScraper:
     @staticmethod
     def get_latest_video():
-        print("[INFO] Starting Telegram channel scrape...")
+        print("🔍 Fetching latest video from Telegram...")
         try:
             response = requests.get(Config.CHANNEL_URL, timeout=15)
-            response.raise_for_status()
-            print("[INFO] Telegram channel page fetched successfully.")
+            response.raise_for_status()  # Fail if status != 200
 
             soup = BeautifulSoup(response.text, 'html.parser')
             videos = []
@@ -19,41 +18,37 @@ class TelegramScraper:
             for message in soup.find_all('div', class_='tgme_widget_message'):
                 video = message.find('a', class_='tgme_widget_message_video_player')
                 if video:
-                    video_url = video.get('href', '')
-                    date_tag = message.find('time')
+                    video_url = video.get('href", "")
+                    date_tag = message.find('time")
                     if not date_tag:
-                        print("[WARN] No date found for a video message, skipping.")
+                        print("⚠️ No date found for video, skipping.")
                         continue
-                    date_str = date_tag.get('datetime', '')
+
+                    date_str = date_tag.get('datetime", "")
                     try:
                         date = datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S%z')
                     except Exception as e:
-                        print(f"[WARN] Failed to parse date '{date_str}': {e}")
+                        print(f"⚠️ Failed to parse date: {e}")
                         continue
 
-                    text_div = message.find('div', class_='tgme_widget_message_text')
-                    description = text_div.get_text(strip=True) if text_div else ""
+                    description = message.find('div', class_='tgme_widget_message_text').get_text(strip=True) if message.find('div', class_='tgme_widget_message_text') else "No description"
                     
-                    videos.append({
-                        'url': video_url,
-                        'date': date,
-                        'description': description
-                    })
+                    videos.append({'url': video_url, 'date': date, 'description': description})
 
             if not videos:
-                print("[WARN] No videos found in Telegram channel.")
+                print("❌ No videos found in the channel!")
                 return None
 
             latest = max(videos, key=lambda x: x['date'])
-            print(f"[INFO] Latest video found: {latest['url']} published at {latest['date']}")
+            print(f"✅ Latest video: {latest['url']} (Published: {latest['date']})")
             return latest
 
         except requests.Timeout:
-            print("[ERROR] Request to Telegram channel timed out.")
+            print("❌ Telegram request timed out!")
         except requests.RequestException as e:
-            print(f"[ERROR] Request exception: {e}")
+            print(f"❌ Failed to fetch Telegram: {e}")
         except Exception as e:
-            print(f"[ERROR] Unexpected error scraping Telegram: {e}")
+            print(f"❌ Unexpected error: {e}")
             print(traceback.format_exc())
 
         return None
