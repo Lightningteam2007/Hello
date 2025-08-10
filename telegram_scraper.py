@@ -20,12 +20,19 @@ class TelegramScraper:
 
             for message in soup.find_all('div', class_='tgme_widget_message'):
                 video = message.find('a', class_='tgme_widget_message_video_player')
-                if video:
-                video_url = video.get("href", "")
-                date_str = date_tag.get("datetime", "")
-                    if not date_tag:
-                        print("⚠️ No date found for video, skipping.")
-                        continue
+if video:
+    video_url = video.get("href", "")
+    date_tag = message.find('time', class_='tgme_widget_message_date')  # اضافه کردن این خط
+    if not date_tag:
+        print("⚠️ No date found for video, skipping.")
+        continue
+
+    date_str = date_tag.get("datetime", "")
+    try:
+        date = datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S%z')
+    except Exception as e:
+        print(f"⚠️ Failed to parse date: {e}")
+        continue
 
                     date_str = date_tag.get("datetime", "")  # ✅ اصلاح: استفاده از " به جای '
                     try:
