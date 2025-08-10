@@ -15,20 +15,24 @@ class VideoProcessor:
             if os.path.getsize(input_path) == 0:
                 raise ValueError("فایل ویدیو خالی است!")
             
-            # بررسی با FFmpeg
-            cmd = ['ffmpeg', '-v', 'error', '-i', input_path, '-f', 'null', '-']
+            # بررسی با FFprobe
+            cmd = ['ffprobe', '-v', 'error', '-i', input_path, '-show_format', '-show_streams']
             result = subprocess.run(
                 cmd,
                 stderr=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                text=True
+                timeout=10
             )
             
             if result.returncode != 0:
-                raise ValueError(f"فایل ویدیو نامعتبر است: {result.stderr}")
+                error_msg = result.stderr.decode().strip()
+                raise ValueError(f"فایل ویدیو نامعتبر است: {error_msg}")
             
             return True
             
+        except subprocess.TimeoutExpired:
+            print("⏳ زمان بررسی فایل به پایان رسید")
+            return False
         except Exception as e:
             print(f"❌ خطا در بررسی فایل ویدیو: {str(e)}")
             return False
