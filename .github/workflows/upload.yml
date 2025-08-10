@@ -19,8 +19,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y chromium-browser chromium-chromedriver ffmpeg
+          sudo apt-get install -y ffmpeg chromium-browser chromium-chromedriver
           pip install -r requirements.txt
+          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+          sudo chmod a+rx /usr/local/bin/yt-dlp
           
       - name: Run Uploader
         env:
