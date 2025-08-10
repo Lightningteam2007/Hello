@@ -9,14 +9,13 @@ class VideoProcessor:
     def validate_video_file(input_path):
         """بررسی صحت فایل ویدیو قبل از پردازش"""
         try:
-            # بررسی وجود فایل و اندازه آن
             if not os.path.exists(input_path):
                 raise FileNotFoundError(f"فایل ویدیو یافت نشد: {input_path}")
             
             if os.path.getsize(input_path) == 0:
                 raise ValueError("فایل ویدیو خالی است!")
             
-            # بررسی اولیه با FFmpeg
+            # بررسی با FFmpeg
             cmd = ['ffmpeg', '-v', 'error', '-i', input_path, '-f', 'null', '-']
             result = subprocess.run(
                 cmd,
@@ -57,10 +56,10 @@ class VideoProcessor:
             current_ratio = clip.w / clip.h
             
             # 5. اضافه کردن حاشیه سیاه
-            if abs(current_ratio - target_ratio) < 0.01:  # نسبت مناسب است
+            if abs(current_ratio - target_ratio) < 0.01:
                 processed_clip = clip
                 print("🔵 نسبت ابعاد مناسب است - بدون تغییر")
-            elif current_ratio > target_ratio:  # ویدیوی افقی
+            elif current_ratio > target_ratio:
                 new_height = int(clip.w / target_ratio)
                 padding = (new_height - clip.h) / 2
                 processed_clip = CompositeVideoClip([
@@ -68,7 +67,7 @@ class VideoProcessor:
                     clip.set_position(("center", padding))
                 ], size=(clip.w, new_height))
                 print("🔳 حاشیه عمودی اضافه شد")
-            else:  # ویدیوی عمودی
+            else:
                 new_width = int(clip.h * target_ratio)
                 padding = (new_width - clip.w) / 2
                 processed_clip = CompositeVideoClip([
@@ -77,17 +76,17 @@ class VideoProcessor:
                 ], size=(new_width, clip.h))
                 print("🔲 حاشیه افقی اضافه شد")
             
-            # 6. ذخیره ویدیو با تنظیمات بهینه
-            processed_clip = processed_clip.resize(height=1920)
+            # 6. ذخیره ویدیو
+            processed_clip = processed_clip.resize(height=Config.TARGET_HEIGHT)
             processed_clip.write_videofile(
                 output_path,
                 codec="libx264",
                 audio_codec="aac",
-                fps=60,
+                fps=Config.TARGET_FPS,
                 preset='ultrafast',
                 threads=4,
-                bitrate="8000k",
-                logger=None  # غیرفعال کردن لاگ‌های اضافی
+                bitrate=Config.BITRATE,
+                logger=None
             )
             
             print(f"✅ ویدیو پردازش شده در: {output_path}")
