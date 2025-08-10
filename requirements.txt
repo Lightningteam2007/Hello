@@ -6,3 +6,4 @@ beautifulsoup4==4.12.2
 python-dotenv==1.0.0
 yt-dlp==2023.11.16
 ffmpeg-python==0.2.0
+pillow>=9.0.0  # اضافه کردن این خط برای نسخه جدید pillow
