@@ -5,6 +5,7 @@ from content_generator import ContentGenerator
 import time
 import os
 import shutil
+import traceback
 from config import Config
 
 def cleanup_temp_files():
@@ -33,22 +34,26 @@ def main():
                     return
                 
                 # 2. دانلود ویدیو
+                print(f"📥 در حال دانلود ویدیو از تلگرام...")
                 video_path = TelegramScraper.download_video(video_info['url'])
                 if not video_path:
                     print("❌ دانلود ویدیو ناموفق بود. خروج...")
                     continue
                 
                 # 3. پردازش ویدیو
+                print(f"🔄 در حال پردازش ویدیو...")
                 processed_path = VideoProcessor.process_for_shorts(video_path)
                 if not processed_path:
                     print("❌ پردازش ویدیو ناموفق بود. خروج...")
                     continue
                 
                 # 4. تولید عنوان و توضیحات
+                print(f"✍️ در حال تولید محتوا...")
                 title = ContentGenerator.generate_title(video_info['description'])
                 description = ContentGenerator.generate_description(video_info)
                 
                 # 5. آپلود به یوتیوب
+                print(f"📤 در حال آپلود به یوتیوب...")
                 if YouTubeUploader.upload_shorts(processed_path, title, description):
                     print("🎉 ویدیو با موفقیت به یوتیوب آپلود شد!")
                     break
