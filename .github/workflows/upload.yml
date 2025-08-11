@@ -32,7 +32,6 @@ jobs:
             libxcb-xinerama0 \
             chromium-browser
           ls -l /usr/bin/chromium-browser || (echo "Chromium not found" && exit 1)
-          # حذف فایل یا لینک موجود
           sudo rm -f /usr/bin/google-chrome
           sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
           ls -l /usr/bin/google-chrome || (echo "Failed to create google-chrome symlink" && exit 1)
@@ -65,7 +64,7 @@ jobs:
         run: |
           mkdir -p downloaded_videos processed_videos
           Xvfb :99 -screen 0 1920x1080x24 > xvfb.log 2>&1 &
-          sleep 2
+          sleep 5
           export DISPLAY=:99
           timeout 45m python main.py || (echo "خطا در اجرای اسکریپت" && cat xvfb.log && cat chromedriver.log && exit 1)
 
@@ -76,5 +75,7 @@ jobs:
           name: error-logs-${{ github.run_number }}
           path: |
             *.log
+            *.html
             error_attempt_*.png
+            upload_page_*.png
             chromedriver.log
