@@ -10,6 +10,7 @@ import json
 import os
 import traceback
 from config import Config
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
 class YouTubeUploader:
     @staticmethod
@@ -22,6 +23,11 @@ class YouTubeUploader:
             cookies = json.loads(Config.YT_COOKIES)
             driver.get("https://www.youtube.com")
             time.sleep(5)
+            
+            # پاک کردن کوکی‌های قبلی
+            driver.delete_all_cookies()
+            time.sleep(2)
+            
             for cookie in cookies:
                 if 'expiry' in cookie:
                     del cookie['expiry']
@@ -30,6 +36,7 @@ class YouTubeUploader:
                 except Exception as e:
                     print(f"⚠️ Could not add cookie: {e}")
                     continue
+            
             driver.refresh()
             time.sleep(5)
             print("✅ Cookies loaded successfully.")
@@ -44,12 +51,27 @@ class YouTubeUploader:
         try:
             driver.get("https://www.youtube.com")
             time.sleep(5)
-            avatar = driver.find_elements(By.CSS_SELECTOR, "img#img")
-            if not avatar:
-                print("❌ User is NOT logged in!")
-                return False
-            print("✅ User is logged in.")
-            return True
+            
+            # روش‌های مختلف برای بررسی لاگین
+            try:
+                avatar = driver.find_element(By.CSS_SELECTOR, "img#img")
+                if avatar:
+                    print("✅ User is logged in.")
+                    return True
+            except NoSuchElementException:
+                pass
+                
+            try:
+                account_button = driver.find_element(By.XPATH, "//a[contains(@href, 'account')]")
+                if account_button:
+                    print("✅ User is logged in.")
+                    return True
+            except NoSuchElementException:
+                pass
+                
+            print("❌ User is NOT logged in!")
+            return False
+            
         except Exception as e:
             print(f"❌ Login check failed: {e}")
             print(traceback.format_exc())
@@ -58,10 +80,10 @@ class YouTubeUploader:
     @staticmethod
     def upload_shorts(video_path, title, description):
         for attempt in range(1, Config.MAX_RETRIES + 1):
-            print(f"🔄 Attempt {attempt}/{Config.MAX_RETRIES}")
+            print(f"\n🔄 Attempt {attempt}/{Config.MAX_RETRIES}")
             driver = None
             try:
-                # تنظیمات Chrome
+                # تنظیمات پیشرفته Chrome
                 options = Options()
                 options.add_argument("--no-sandbox")
                 options.add_argument("--disable-dev-shm-usage")
@@ -80,91 +102,168 @@ class YouTubeUploader:
 
                 service = Service(ChromeDriverManager().install())
                 driver = webdriver.Chrome(options=options, service=service)
-                driver.execute_script(
-                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-                )
+                
+                # مخفی کردن شناسایی اتوماسیون
+                driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+                    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                })
 
+                # لاگین و احراز هویت
                 if not (YouTubeUploader.load_cookies(driver) and YouTubeUploader.check_login(driver)):
                     raise Exception("Login failed!")
 
                 print("🌐 Navigating to YouTube upload page...")
                 driver.get(Config.YT_UPLOAD_URL)
-                time.sleep(20)  # افزایش زمان انتظار
+                time.sleep(15)
 
-                # دیباگ
+                # ذخیره صفحه برای دیباگ
                 with open(f"upload_page_{attempt}.html", "w", encoding="utf-8") as f:
                     f.write(driver.page_source)
                 driver.save_screenshot(f"upload_page_{attempt}.png")
 
-                # روش جدید برای آپلود فایل
+                # آپلود فایل ویدیویی
                 print("📤 Uploading video file...")
                 try:
-                    # روش 1: استفاده از JavaScript برای ایجاد input
+                    # ایجاد المان آپلود دینامیک
                     driver.execute_script('''
                         const input = document.createElement('input');
                         input.type = 'file';
-                        input.id = 'custom-file-upload';
-                        input.style.display = 'block';
-                        input.style.visibility = 'visible';
-                        input.style.position = 'absolute';
+                        input.id = 'dynamic-upload-input';
+                        input.accept = 'video/*';
+                        input.style.position = 'fixed';
                         input.style.top = '0';
                         input.style.left = '0';
                         input.style.width = '100%';
                         input.style.height = '100%';
+                        input.style.opacity = '0';
                         document.body.appendChild(input);
                     ''')
-                    file_input = WebDriverWait(driver, 30).until(
-                        EC.presence_of_element_located((By.ID, 'custom-file-upload'))
+                    
+                    file_input = WebDriverWait(driver, 45).until(
+                        EC.presence_of_element_located((By.ID, 'dynamic-upload-input'))
                     )
                     file_input.send_keys(os.path.abspath(video_path))
+                    print("✅ Video file uploaded.")
+                    time.sleep(10)
                 except Exception as e:
-                    print(f"⚠️ روش جدید آپلود شکست خورد: {e}")
-                    # روش قدیمی به عنوان fallback
-                    try:
-                        file_input = WebDriverWait(driver, 30).until(
-                            EC.presence_of_element_located((By.XPATH, '//input[@type="file"]'))
-                        )
-                        file_input.send_keys(os.path.abspath(video_path))
-                    except:
-                        raise Exception("هیچکدام از روش‌های آپلود کار نکرد")
+                    print(f"⚠️ روش دینامیک آپلود شکست خورد: {e}")
+                    raise
 
-                print("✅ Video file uploaded.")
-                time.sleep(10)
-
-                # تنظیم عنوان
+                # تنظیم عنوان با روش‌های مختلف
                 print("✏️ Setting title...")
-                title_field = WebDriverWait(driver, 30).until(
-                    EC.element_to_be_clickable((By.XPATH, "//div[@id='textbox' and contains(@aria-label, 'Title')]"))
-                )
-                title_field.clear()
-                title_field.send_keys(title)
+                title_set = False
+                title_selectors = [
+                    ("XPATH", "//div[@id='textbox' and contains(@aria-label, 'Title')]"),
+                    ("CSS", "div[aria-label='Title']"),
+                    ("ID", "title-textarea"),
+                    ("XPATH", "//*[contains(@aria-label, 'Title')]")
+                ]
+                
+                for selector_type, selector in title_selectors:
+                    try:
+                        title_field = WebDriverWait(driver, 20).until(
+                            EC.element_to_be_clickable((By.__getattribute__(selector_type), selector))
+                        )
+                        title_field.clear()
+                        for char in title:
+                            title_field.send_keys(char)
+                            time.sleep(0.05)
+                        title_set = True
+                        print(f"✅ Title set using {selector_type}: {selector}")
+                        break
+                    except Exception as e:
+                        print(f"⚠️ Failed to set title with {selector_type} {selector}: {e}")
+
+                if not title_set:
+                    raise Exception("All title setting methods failed")
 
                 # تنظیم توضیحات
                 print("📝 Setting description...")
-                description_field = WebDriverWait(driver, 30).until(
-                    EC.element_to_be_clickable((By.XPATH, "//div[@id='textbox' and contains(@aria-label, 'Description')]"))
-                )
-                description_field.clear()
-                description_field.send_keys(description)
+                try:
+                    desc_selectors = [
+                        ("XPATH", "//div[@id='textbox' and contains(@aria-label, 'Description')]"),
+                        ("CSS", "div[aria-label='Description']"),
+                        ("ID", "description-textarea")
+                    ]
+                    
+                    for selector_type, selector in desc_selectors:
+                        try:
+                            desc_field = WebDriverWait(driver, 15).until(
+                                EC.element_to_be_clickable((By.__getattribute__(selector_type), selector))
+                            )
+                            desc_field.clear()
+                            desc_field.send_keys(description)
+                            print(f"✅ Description set using {selector_type}")
+                            break
+                        except Exception as e:
+                            print(f"⚠️ Failed to set description with {selector_type}: {e}")
+                except Exception as e:
+                    print(f"⚠️ Could not set description: {e}")
 
-                # کلیک روی دکمه Next (3 بار)
+                # کلیک روی دکمه‌های بعدی
+                print("⏭️ Clicking Next buttons...")
                 for i in range(3):
-                    print(f"⏭️ Clicking Next ({i+1}/3)...")
-                    next_btn = WebDriverWait(driver, 30).until(
-                        EC.element_to_be_clickable((By.XPATH, "//div[contains(@id, 'next-button')]"))
-                    )
-                    next_btn.click()
-                    time.sleep(5)
+                    try:
+                        next_buttons = [
+                            ("XPATH", "//div[contains(@id, 'next-button')]"),
+                            ("CSS", "div.next-button"),
+                            ("XPATH", "//*[contains(text(), 'Next')]")
+                        ]
+                        
+                        clicked = False
+                        for selector_type, selector in next_buttons:
+                            try:
+                                next_btn = WebDriverWait(driver, 15).until(
+                                    EC.element_to_be_clickable((By.__getattribute__(selector_type), selector))
+                                )
+                                next_btn.click()
+                                print(f"✅ Clicked Next ({i+1}/3) using {selector_type}")
+                                time.sleep(5)
+                                clicked = True
+                                break
+                            except Exception as e:
+                                print(f"⚠️ Failed to click Next with {selector_type}: {e}")
+                        
+                        if not clicked:
+                            raise Exception(f"Could not click Next button ({i+1}/3)")
+                            
+                    except Exception as e:
+                        print(f"⚠️ Error in Next button {i+1}: {e}")
+                        raise
 
                 # انتشار ویدیو
                 print("🚀 Publishing video...")
-                publish_btn = WebDriverWait(driver, 30).until(
-                    EC.element_to_be_clickable((By.XPATH, "//div[contains(@id, 'done-button')]"))
-                )
-                publish_btn.click()
-                time.sleep(15)
-                print("✅ Video published successfully!")
-                return True
+                try:
+                    publish_buttons = [
+                        ("XPATH", "//div[contains(@id, 'done-button')]"),
+                        ("CSS", "div.done-button"),
+                        ("XPATH", "//*[contains(text(), 'Publish')]")
+                    ]
+                    
+                    published = False
+                    for selector_type, selector in publish_buttons:
+                        try:
+                            publish_btn = WebDriverWait(driver, 20).until(
+                                EC.element_to_be_clickable((By.__getattribute__(selector_type), selector))
+                            )
+                            publish_btn.click()
+                            print(f"✅ Published using {selector_type}")
+                            time.sleep(15)
+                            published = True
+                            break
+                        except Exception as e:
+                            print(f"⚠️ Failed to publish with {selector_type}: {e}")
+                    
+                    if not published:
+                        raise Exception("All publish methods failed")
+                        
+                    print("✅ Video published successfully!")
+                    return True
+                    
+                except Exception as e:
+                    print(f"❌ Failed to publish: {e}")
+                    raise
 
             except Exception as e:
                 print(f"❌ Attempt {attempt} failed: {e}")
@@ -174,16 +273,16 @@ class YouTubeUploader:
                         driver.save_screenshot(f"error_attempt_{attempt}.png")
                         with open(f"page_source_{attempt}.html", "w", encoding="utf-8") as f:
                             f.write(driver.page_source)
-                    except:
-                        pass
+                    except Exception as e:
+                        print(f"⚠️ Could not save debug info: {e}")
                 time.sleep(Config.DELAY_BETWEEN_ATTEMPTS)
 
             finally:
                 if driver:
                     try:
                         driver.quit()
-                    except:
-                        pass
+                    except Exception as e:
+                        print(f"⚠️ Error closing driver: {e}")
 
         print("❌ All upload attempts failed!")
         return False
