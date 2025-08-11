@@ -7,7 +7,7 @@ on:
 
 jobs:
   upload:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # استفاده از Ubuntu 22.04 برای سازگاری
     timeout-minutes: 60
 
     steps:
@@ -22,6 +22,8 @@ jobs:
       - name: نصب و تنظیم پیش‌نیازها
         run: |
           sudo apt-get update -y
+          # بررسی مخازن
+          apt-cache policy chromium-browser chromium-chromedriver
           sudo apt-get install -y \
             ffmpeg \
             libgl1 \
@@ -29,8 +31,8 @@ jobs:
             libopengl0 \
             libegl1 \
             libxcb-xinerama0 \
-            chromium-browser=114.0.5735.90-0ubuntu0.22.04.1 \
-            chromium-chromedriver=114.0.5735.90-0ubuntu0.22.04.1
+            chromium-browser \
+            chromium-chromedriver
           ls -l /usr/lib/chromium-browser/chromedriver || (echo "Chromedriver not found" && exit 1)
           sudo ln -s /usr/lib/chromium-browser/chromedriver /usr/bin/chromedriver
           ls -l /usr/bin/chromedriver || (echo "Failed to create chromedriver symlink" && exit 1)
