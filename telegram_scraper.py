@@ -17,64 +17,125 @@ class TelegramScraper:
                 'browser': 'chrome',
                 'platform': 'windows',
                 'desktop': True
-            }
+            },
+            delay=10,
+            interpreter='nodejs'
         )
         
         try:
             url = f"https://t.me/s/{Config.CHANNEL_USERNAME}"
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9'
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://t.me/',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
             }
             
-            response = scraper.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            messages = soup.find_all('div', class_='tgme_widget_message', limit=15)
-            
-            videos = []
-            for message in messages:
+            # 3 تلاش برای دریافت محتوا
+            for attempt in range(1, 4):
+                print(f"🔄 تلاش {attempt} از 3 برای دریافت محتوا")
                 try:
-                    video = message.find('a', class_='tgme_widget_message_video_player')
-                    if not video:
-                        continue
+                    response = scraper.get(url, headers=headers, timeout=60)
+                    response.raise_for_status()
+                    
+                    # دیباگ: ذخیره پاسخ HTML
+                    debug_filename = f"telegram_debug_{int(time.time())}.html"
+                    with open(debug_filename, "w", encoding="utf-8") as f:
+                        f.write(response.text)
+                    print(f"💾 پاسخ HTML ذخیره شد: {debug_filename}")
+                    
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    
+                    # روش‌های مختلف برای یافتن ویدیوها
+                    video_elements = []
+                    
+                    # روش 1: پیام‌های دارای پلیر ویدیو
+                    video_wrappers = soup.find_all('div', class_='tgme_widget_message_video_wrap')
+                    video_elements.extend(video_wrappers)
+                    
+                    # روش 2: لینک‌های ویدیو
+                    video_links = soup.find_all('a', href=lambda x: x and any(k in x for k in ['video', '.mp4', '.mov']))
+                    video_elements.extend(video_links)
+                    
+                    # روش 3: تگ‌های ویدیو
+                    video_tags = soup.find_all('video')
+                    video_elements.extend(video_tags)
+                    
+                    # روش 4: پیام‌های معمولی با محتوای ویدیویی
+                    messages = soup.find_all('div', class_='tgme_widget_message', limit=20)
+                    
+                    videos = []
+                    for element in video_elements + messages:
+                        try:
+                            video_data = {}
+                            
+                            # استخراج URL ویدیو
+                            if element.name == 'a':
+                                video_url = element['href']
+                            elif element.name == 'video':
+                                video_url = element.find('source')['src'] if element.find('source') else None
+                            elif 'tgme_widget_message_video_wrap' in element.get('class', []):
+                                video_url = element.find('a')['href'] if element.find('a') else None
+                            else:
+                                video = element.find('a', class_='tgme_widget_message_video_player')
+                                video_url = video['href'] if video else None
+                            
+                            if not video_url:
+                                continue
+                                
+                            # استخراج تاریخ
+                            date_tag = element.find('time', {'datetime': True}) or \
+                                      element.find_parent('div', class_='tgme_widget_message').find('time', {'datetime': True})
+                            if date_tag:
+                                try:
+                                    date = datetime.strptime(date_tag['datetime'], '%Y-%m-%dT%H:%M:%S%z')
+                                except ValueError:
+                                    date = datetime.now()
+                            else:
+                                date = datetime.now()
+                            
+                            # استخراج توضیحات
+                            desc = element.find('div', class_='tgme_widget_message_text') or \
+                                   element.find_parent('div', class_='tgme_widget_message').find('div', class_='tgme_widget_message_text')
+                            description = desc.get_text(strip=True) if desc else "بدون توضیحات"
+                            
+                            videos.append({
+                                'url': video_url,
+                                'date': date,
+                                'description': description,
+                                'source': element.name
+                            })
+                            
+                        except Exception as e:
+                            print(f"⚠️ خطا در پردازش عنصر ویدیو: {str(e)}")
+                            continue
+                    
+                    if not videos:
+                        print("❌ هیچ ویدیویی در کانال یافت نشد! ساختارهای بررسی شده:")
+                        print("1. div.tgme_widget_message_video_wrap")
+                        print("2. a[href*='video']")
+                        print("3. video tags")
+                        print("4. div.tgme_widget_message")
+                        return None
                         
-                    video_url = video['href']
-                    date_tag = message.find('time', {'datetime': True})
-                    
-                    if not date_tag:
-                        continue
-                        
-                    date_str = date_tag['datetime']
-                    try:
-                        date = datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S%z')
-                    except ValueError:
-                        date = datetime.now()
-                    
-                    desc = message.find('div', class_='tgme_widget_message_text')
-                    description = desc.get_text(strip=True) if desc else "بدون توضیحات"
-                    
-                    videos.append({
-                        'url': video_url,
-                        'date': date,
-                        'description': description
-                    })
+                    # انتخاب جدیدترین ویدیو
+                    latest = max(videos, key=lambda x: x['date'])
+                    print(f"✅ آخرین ویدیو یافت شد (از {latest['source']}):")
+                    print(f"📅 تاریخ: {latest['date']}")
+                    print(f"🔗 لینک: {latest['url']}")
+                    print(f"📝 توضیحات: {latest['description'][:50]}...")
+                    return latest
                     
                 except Exception as e:
-                    print(f"⚠️ خطا در پردازش پیام: {str(e)}")
+                    print(f"⚠️ خطا در دریافت محتوا (تلاش {attempt}): {str(e)}")
+                    if attempt < 3:
+                        time.sleep(15)
                     continue
-            
-            if not videos:
-                print("❌ هیچ ویدیویی در کانال یافت نشد!")
-                return None
-                
-            latest = max(videos, key=lambda x: x['date'])
-            print(f"✅ آخرین ویدیو: {latest['url']} (تاریخ انتشار: {latest['date']})")
-            return latest
+                    
+            raise Exception("پس از 3 تلاش، دریافت ویدیو ناموفق بود")
             
         except Exception as e:
-            print(f"❌ خطا در دریافت محتوا: {str(e)}")
+            print(f"❌ خطای کلی در دریافت محتوا: {str(e)}")
             print(traceback.format_exc())
             return None
 
@@ -94,7 +155,11 @@ class TelegramScraper:
                     'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
                     'retries': 3,
                     'quiet': True,
-                    'no_warnings': True
+                    'no_warnings': True,
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Referer': 'https://t.me/'
+                    }
                 }
                 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -127,12 +192,13 @@ class TelegramScraper:
                         'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5'
                     }
                     
-                    with scraper.get(video_url, headers=headers, stream=True, timeout=30) as response:
+                    with scraper.get(video_url, headers=headers, stream=True, timeout=60) as response:
                         response.raise_for_status()
                         
                         with open(filename, 'wb') as f:
                             for chunk in response.iter_content(chunk_size=8192):
-                                f.write(chunk)
+                                if chunk:
+                                    f.write(chunk)
                     
                     # بررسی مضاعف فایل
                     if os.path.getsize(filename) == 0:
