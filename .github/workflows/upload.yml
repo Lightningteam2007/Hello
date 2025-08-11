@@ -9,16 +9,16 @@ jobs:
   upload:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: تنظیم پایتون 3.10
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
           cache: 'pip'
-          
+
       - name: نصب و تنظیم پیش‌نیازها
         run: |
           sudo apt-get update -y
@@ -33,17 +33,19 @@ jobs:
             chromium-chromedriver \
             chromium-codecs-ffmpeg-extra \
             xvfb
-
-          # حذف لینک موجود اگر وجود دارد
           sudo rm -f /usr/bin/google-chrome
           sudo rm -f /usr/bin/chromedriver
-          
-          # ایجاد لینک‌های سمبلیک جدید
           sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome || true
           sudo ln -s /usr/lib/chromium-browser/chromedriver /usr/bin/chromedriver || true
-          
           sudo rm -rf /var/lib/apt/lists/*
-          
+
+      - name: نصب وابستگی‌های پایتون
+        run: |
+          python -m pip install --upgrade pip
+          pip install --force-reinstall -r requirements.txt
+          pip install yt-dlp==2023.11.16
+          yt-dlp --version || (echo "Failed to install yt-dlp" && exit 1)
+
       - name: بررسی نسخه‌ها
         run: |
           echo "### نسخه‌های نصب شده ###"
@@ -54,14 +56,7 @@ jobs:
           echo "Chromium: $(chromium-browser --version || echo 'Not found')"
           echo "Chromedriver: $(chromedriver --version || echo 'Not found')"
           echo "Google Chrome symlink: $(readlink -f /usr/bin/google-chrome || echo 'Not found')"
-          
-      - name: نصب وابستگی‌های پایتون
-        run: |
-          python -m pip install --upgrade pip
-          pip install --force-reinstall -r requirements.txt --ignore-installed
-          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
-          sudo chmod a+rx /usr/local/bin/yt-dlp
-          
+
       - name: اجرای اسکریپت اصلی
         env:
           CHANNEL_USERNAME: ${{ secrets.CHANNEL_USERNAME }}
@@ -69,10 +64,11 @@ jobs:
           DISPLAY: ":99"
         run: |
           mkdir -p downloaded_videos processed_videos
-          Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
+          Xvfb :99 -screen 0 1920x1080x24 > xvfb.log 2>&1 &
+          sleep 2
           export DISPLAY=:99
-          timeout 45m python main.py || (echo "خطا در اجرای اسکریپت" && exit 1)
-          
+          timeout 45m python main.py || (echo "خطا در اجرای اسکریپت" && cat xvfb.log && exit 1)
+
       - name: ذخیره لاگ‌های خطا
         if: always()
         uses: actions/upload-artifact@v4
@@ -80,10 +76,4 @@ jobs:
           name: error-logs-${{ github.run_number }}
           path: |
             *.log
-            *.png
-            *.txt
-            downloaded_videos/
-            processed_videos/
-            chromedriver.log
-            webdriver_error.log
-            error.log
+            error_attempt_*.png
