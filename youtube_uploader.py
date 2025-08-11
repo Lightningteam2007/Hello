@@ -3,6 +3,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 import time
 import json
 import os
@@ -19,14 +20,20 @@ class YouTubeUploader:
         try:
             cookies = json.loads(Config.YT_COOKIES)
             driver.get("https://www.youtube.com")
+            time.sleep(2)
             for cookie in cookies:
                 if 'expiry' in cookie:
                     del cookie['expiry']
-                driver.add_cookie(cookie)
+                try:
+                    driver.add_cookie(cookie)
+                except Exception as e:
+                    print(f"⚠️ Could not add cookie: {e}")
+                    continue
             print("✅ Cookies loaded successfully.")
             return True
         except Exception as e:
             print(f"❌ Failed to load cookies: {e}")
+            print(traceback.format_exc())
             return False
 
     @staticmethod
@@ -34,13 +41,15 @@ class YouTubeUploader:
         try:
             driver.get("https://www.youtube.com")
             time.sleep(3)
-            if "sign in" in driver.page_source.lower():
+            avatar = driver.find_elements(By.CSS_SELECTOR, "img#img")
+            if not avatar:
                 print("❌ User is NOT logged in!")
                 return False
             print("✅ User is logged in.")
             return True
         except Exception as e:
             print(f"❌ Login check failed: {e}")
+            print(traceback.format_exc())
             return False
 
     @staticmethod
@@ -49,54 +58,72 @@ class YouTubeUploader:
             print(f"🔄 Attempt {attempt}/{Config.MAX_RETRIES}")
             driver = None
             try:
-                options = webdriver.ChromeOptions()
+                # تنظیمات Chrome
+                options = Options()
                 options.add_argument("--no-sandbox")
                 options.add_argument("--disable-dev-shm-usage")
                 options.add_argument("--window-size=1920,1080")
-                options.add_argument("--headless")
+                options.add_argument("--headless=new")
                 options.add_argument("--disable-gpu")
+                options.add_argument("--disable-extensions")
+                options.add_argument("--remote-debugging-port=9222")
                 options.binary_location = "/usr/bin/chromium-browser"
 
                 # تنظیم سرویس chromedriver
-                service = Service(executable_path="/usr/bin/chromedriver")
-                driver = webdriver.Chrome(options=options, service=service)
+                service = Service(
+                    executable_path="/usr/bin/chromedriver",
+                    service_args=["--verbose", "--log-path=chromedriver.log"]
+                )
 
-                # Load cookies & check login
-                driver.get("https://www.youtube.com")
+                # ایجاد درایور
+                driver = webdriver.Chrome(options=options, service=service)
+                driver.maximize_window()
+
+                # بارگیری کوکی‌ها و بررسی لاگین
                 if not (YouTubeUploader.load_cookies(driver) and YouTubeUploader.check_login(driver)):
                     raise Exception("Login failed!")
 
-                # Upload video
+                # آپلود ویدیو
+                print("🌐 Navigating to YouTube upload page...")
                 driver.get(Config.YT_UPLOAD_URL)
-                file_input = WebDriverWait(driver, 30).until(
+                time.sleep(3)
+
+                # آپلود فایل
+                print("📤 Uploading video file...")
+                file_input = WebDriverWait(driver, 60).until(
                     EC.presence_of_element_located((By.XPATH, '//input[@type="file"]'))
                 )
                 file_input.send_keys(os.path.abspath(video_path))
-                print("📤 Video file uploaded.")
+                print("✅ Video file uploaded.")
 
-                # Set title & description
-                title_field = WebDriverWait(driver, 30).until(
+                # تنظیم عنوان
+                print("✏️ Setting title...")
+                title_field = WebDriverWait(driver, 60).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "div[aria-label='Title']"))
                 )
                 title_field.clear()
                 title_field.send_keys(title)
 
-                description_field = WebDriverWait(driver, 30).until(
+                # تنظیم توضیحات
+                print("📝 Setting description...")
+                description_field = WebDriverWait(driver, 60).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "div[aria-label='Description']"))
                 )
                 description_field.clear()
                 description_field.send_keys(description)
 
-                # Click Next (3 times)
-                for _ in range(3):
-                    next_btn = WebDriverWait(driver, 30).until(
+                # کلیک روی دکمه Next (3 بار)
+                for i in range(3):
+                    print(f"⏭️ Clicking Next ({i+1}/3)...")
+                    next_btn = WebDriverWait(driver, 60).until(
                         EC.element_to_be_clickable((By.XPATH, "//ytcp-button[@id='next-button']"))
                     )
                     next_btn.click()
                     time.sleep(2)
 
-                # Publish
-                publish_btn = WebDriverWait(driver, 30).until(
+                # انتشار ویدیو
+                print("🚀 Publishing video...")
+                publish_btn = WebDriverWait(driver, 60).until(
                     EC.element_to_be_clickable((By.XPATH, "//ytcp-button[@id='done-button']"))
                 )
                 publish_btn.click()
@@ -107,12 +134,18 @@ class YouTubeUploader:
                 print(f"❌ Attempt {attempt} failed: {e}")
                 print(traceback.format_exc())
                 if driver:
-                    driver.save_screenshot(f"error_attempt_{attempt}.png")
+                    try:
+                        driver.save_screenshot(f"error_attempt_{attempt}.png")
+                    except:
+                        pass
                 time.sleep(10)
 
             finally:
                 if driver:
-                    driver.quit()
+                    try:
+                        driver.quit()
+                    except:
+                        pass
 
         print("❌ All upload attempts failed!")
         return False
