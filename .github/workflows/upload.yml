@@ -8,7 +8,7 @@ on:
 jobs:
   upload:
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 90  # افزایش زمان اجرا
 
     steps:
       - uses: actions/checkout@v4
@@ -18,11 +18,6 @@ jobs:
         with:
           python-version: "3.10"
           cache: 'pip'
-
-      - name: نصب chromium
-        uses: browser-actions/setup-chromium@v1
-        with:
-          chromium-version: 'latest'
 
       - name: نصب و تنظیم پیش‌نیازها
         run: |
@@ -43,19 +38,29 @@ jobs:
             libxrandr2 \
             libxrender1 \
             libxtst6 \
-            xvfb
+            xvfb \
+            chromium-browser \
+            chromium-chromedriver \
+            wget \
+            unzip
 
+          # تنظیم chromium به عنوان chrome
           sudo rm -f /usr/bin/google-chrome
           sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
           sudo chmod +x /usr/bin/google-chrome
-          google-chrome --version
-          which google-chrome
+          
+          # دانلود آخرین نسخه chromedriver
+          CHROME_VERSION=$(google-chrome --version | awk '{print $3}')
+          wget https://chromedriver.storage.googleapis.com/${CHROME_VERSION}/chromedriver_linux64.zip
+          unzip chromedriver_linux64.zip
+          sudo mv chromedriver /usr/bin/chromedriver
+          sudo chmod +x /usr/bin/chromedriver
 
       - name: نصب وابستگی‌های پایتون
         run: |
           python -m pip install --upgrade pip
           pip install --force-reinstall -r requirements.txt
-          pip install webdriver-manager==4.0.2 selenium==4.13.0
+          pip install webdriver-manager==4.0.2 selenium==4.13.0 selenium-stealth==1.0.6
 
       - name: اجرای اسکریپت اصلی
         env:
@@ -65,9 +70,9 @@ jobs:
         run: |
           mkdir -p downloaded_videos processed_videos
           Xvfb :99 -screen 0 1920x1080x24 > xvfb.log 2>&1 &
-          sleep 15
+          sleep 20
           export DISPLAY=:99
-          timeout 45m python main.py || (echo "خطا در اجرای اسکریپت" && exit 1)
+          timeout 75m python main.py || (echo "خطا در اجرای اسکریپت" && exit 1)
 
       - name: ذخیره لاگ‌های دیباگ
         if: always()
@@ -80,3 +85,4 @@ jobs:
             *.png
             downloaded_videos/
             processed_videos/
+            chromedriver.log
