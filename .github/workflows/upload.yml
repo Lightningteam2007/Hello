@@ -8,7 +8,7 @@ on:
 jobs:
   upload:
     runs-on: ubuntu-22.04
-    timeout-minutes: 90  # افزایش زمان اجرا
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +19,7 @@ jobs:
           python-version: "3.10"
           cache: 'pip'
 
-      - name: نصب و تنظیم پیش‌نیازها
+      - name: نصب و تنظیم پیش‌نیازهای سیستم
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \
@@ -40,27 +40,29 @@ jobs:
             libxtst6 \
             xvfb \
             chromium-browser \
-            chromium-chromedriver \
-            wget \
-            unzip
+            chromium-chromedriver
+
+          # ایجاد مسیرهای مورد نیاز برای chromium
+          sudo mkdir -p /home/runner/snap/chromium/common/.cache
+          sudo touch /home/runner/snap/chromium/common/.cache/desktop-runtime-date
+          sudo chmod -R 777 /home/runner/snap
 
           # تنظیم chromium به عنوان chrome
-          sudo rm -f /usr/bin/google-chrome
+          sudo rm -f /usr/bin/google-chrome || true
           sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
           sudo chmod +x /usr/bin/google-chrome
-          
-          # دانلود آخرین نسخه chromedriver
-          CHROME_VERSION=$(google-chrome --version | awk '{print $3}')
-          wget https://chromedriver.storage.googleapis.com/${CHROME_VERSION}/chromedriver_linux64.zip
-          unzip chromedriver_linux64.zip
-          sudo mv chromedriver /usr/bin/chromedriver
-          sudo chmod +x /usr/bin/chromedriver
+
+          # بررسی نسخه‌ها
+          echo "### نسخه‌های نصب شده ###"
+          chromium-browser --version
+          google-chrome --version
+          chromedriver --version
 
       - name: نصب وابستگی‌های پایتون
         run: |
           python -m pip install --upgrade pip
           pip install --force-reinstall -r requirements.txt
-          pip install webdriver-manager==4.0.2 selenium==4.13.0 selenium-stealth==1.0.6
+          pip install webdriver-manager==4.0.2 selenium==4.13.0
 
       - name: اجرای اسکریپت اصلی
         env:
