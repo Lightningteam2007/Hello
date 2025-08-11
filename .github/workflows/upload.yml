@@ -45,35 +45,17 @@ jobs:
             libxtst6 \
             xvfb
 
-          # تنظیم chromium به عنوان chrome
           sudo rm -f /usr/bin/google-chrome
           sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
           sudo chmod +x /usr/bin/google-chrome
           google-chrome --version
           which google-chrome
 
-      - name: بررسی وضعیت سیستم
-        run: |
-          echo "وضعیت سرویس‌ها:"
-          systemctl list-units --type=service | grep -E 'hosted-compute-agent|chrome' || true
-          echo "ورژن chromium:"
-          chromium-browser --version
-          echo "ورژن google-chrome:"
-          /usr/bin/google-chrome --version || echo "google-chrome not working"
-
       - name: نصب وابستگی‌های پایتون
         run: |
           python -m pip install --upgrade pip
           pip install --force-reinstall -r requirements.txt
           pip install webdriver-manager==4.0.2 selenium==4.13.0
-
-      - name: بررسی نسخه‌ها
-        run: |
-          echo "### نسخه‌های نصب شده ###"
-          ffmpeg -version | head -n 1
-          python -c "import selenium; print(f'Selenium: {selenium.__version__}')"
-          chromium-browser --version
-          google-chrome --version
 
       - name: اجرای اسکریپت اصلی
         env:
@@ -83,17 +65,18 @@ jobs:
         run: |
           mkdir -p downloaded_videos processed_videos
           Xvfb :99 -screen 0 1920x1080x24 > xvfb.log 2>&1 &
-          sleep 10
+          sleep 15
           export DISPLAY=:99
           timeout 45m python main.py || (echo "خطا در اجرای اسکریپت" && exit 1)
 
-      - name: ذخیره لاگ‌های خطا
+      - name: ذخیره لاگ‌های دیباگ
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: error-logs-${{ github.run_number }}
+          name: debug-artifacts-${{ github.run_number }}
           path: |
             *.log
             *.html
             *.png
-            chromedriver.log
+            downloaded_videos/
+            processed_videos/
