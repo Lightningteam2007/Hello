@@ -19,7 +19,7 @@ jobs:
           python-version: "3.10"
           cache: 'pip'
           
-      - name: نصب پیش‌نیازهای سیستم
+      - name: نصب و تنظیم پیش‌نیازها
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \
@@ -34,9 +34,14 @@ jobs:
             chromium-codecs-ffmpeg-extra \
             xvfb
 
-          # ایجاد لینک‌های سمبلیک
-          sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
-          sudo ln -s /usr/lib/chromium-browser/chromedriver /usr/bin/chromedriver
+          # حذف لینک موجود اگر وجود دارد
+          sudo rm -f /usr/bin/google-chrome
+          sudo rm -f /usr/bin/chromedriver
+          
+          # ایجاد لینک‌های سمبلیک جدید
+          sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome || true
+          sudo ln -s /usr/lib/chromium-browser/chromedriver /usr/bin/chromedriver || true
+          
           sudo rm -rf /var/lib/apt/lists/*
           
       - name: بررسی نسخه‌ها
@@ -46,8 +51,9 @@ jobs:
           yt-dlp --version
           python -c "import PIL; print(f'Pillow: {PIL.__version__}')"
           python -c "import moviepy; print(f'MoviePy: {moviepy.__version__}')"
-          echo "Chromium: $(chromium-browser --version)"
-          echo "Chromedriver: $(chromedriver --version)"
+          echo "Chromium: $(chromium-browser --version || echo 'Not found')"
+          echo "Chromedriver: $(chromedriver --version || echo 'Not found')"
+          echo "Google Chrome symlink: $(readlink -f /usr/bin/google-chrome || echo 'Not found')"
           
       - name: نصب وابستگی‌های پایتون
         run: |
@@ -56,7 +62,7 @@ jobs:
           sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
           sudo chmod a+rx /usr/local/bin/yt-dlp
           
-      - name: اجرای اسکریپت اصلی با Xvfb
+      - name: اجرای اسکریپت اصلی
         env:
           CHANNEL_USERNAME: ${{ secrets.CHANNEL_USERNAME }}
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
