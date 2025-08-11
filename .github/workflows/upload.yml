@@ -19,6 +19,11 @@ jobs:
           python-version: "3.10"
           cache: 'pip'
 
+      - name: نصب chromium
+        uses: browser-actions/setup-chromium@v1
+        with:
+          chromium-version: 'latest'
+
       - name: نصب و تنظیم پیش‌نیازها
         run: |
           sudo apt-get update -y
@@ -38,14 +43,23 @@ jobs:
             libxrandr2 \
             libxrender1 \
             libxtst6 \
-            xvfb \
-            chromium-browser \
-            chromium-chromedriver
+            xvfb
 
+          # تنظیم chromium به عنوان chrome
+          sudo rm -f /usr/bin/google-chrome
           sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
           sudo chmod +x /usr/bin/google-chrome
           google-chrome --version
           which google-chrome
+
+      - name: بررسی وضعیت سیستم
+        run: |
+          echo "وضعیت سرویس‌ها:"
+          systemctl list-units --type=service | grep -E 'hosted-compute-agent|chrome' || true
+          echo "ورژن chromium:"
+          chromium-browser --version
+          echo "ورژن google-chrome:"
+          /usr/bin/google-chrome --version || echo "google-chrome not working"
 
       - name: نصب وابستگی‌های پایتون
         run: |
