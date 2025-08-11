@@ -4,7 +4,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager  # اضافه شده
+from webdriver_manager.chrome import ChromeDriverManager
 import time
 import json
 import os
@@ -71,22 +71,17 @@ class YouTubeUploader:
                 options.add_argument("--disable-blink-features=AutomationControlled")
                 options.add_argument("--disable-infobars")
                 options.add_argument("--start-maximized")
+                options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 options.binary_location = "/usr/bin/chromium-browser"
 
-                # استفاده از webdriver-manager برای مدیریت Chromedriver
+                # استفاده از webdriver-manager
                 service = Service(ChromeDriverManager().install())
 
                 # ایجاد درایور
-                try:
-                    driver = webdriver.Chrome(options=options, service=service)
-                    driver.execute_script(
-                        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-                    )
-                except Exception as e:
-                    print(f"❌ Failed to initialize Chrome: {str(e)}")
-                    with open("webdriver_error.log", "w") as f:
-                        f.write(f"Driver init error: {str(e)}\n")
-                    raise
+                driver = webdriver.Chrome(options=options, service=service)
+                driver.execute_script(
+                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+                )
 
                 driver.maximize_window()
 
@@ -97,13 +92,20 @@ class YouTubeUploader:
                 # آپلود ویدیو
                 print("🌐 Navigating to YouTube upload page...")
                 driver.get(Config.YT_UPLOAD_URL)
-                time.sleep(3)
+                time.sleep(10)  # افزایش زمان انتظار
+                driver.save_screenshot(f"upload_page_attempt_{attempt}.png")  # دیباگ
 
                 # آپلود فایل
                 print("📤 Uploading video file...")
-                file_input = WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, '//input[@type="file"]'))
-                )
+                try:
+                    file_input = WebDriverWait(driver, 120).until(
+                        EC.presence_of_element_located((By.XPATH, '//input[@type="file"]'))
+                    )
+                except:
+                    print("⚠️ XPATH selector failed, trying alternative CSS selector...")
+                    file_input = WebDriverWait(driver, 120).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file'][accept*='video']"))
+                    )
                 file_input.send_keys(os.path.abspath(video_path))
                 print("✅ Video file uploaded.")
 
@@ -147,6 +149,8 @@ class YouTubeUploader:
                 if driver:
                     try:
                         driver.save_screenshot(f"error_attempt_{attempt}.png")
+                        with open(f"page_source_{attempt}.html", "w", encoding="utf-8") as f:
+                            f.write(driver.page_source)
                     except:
                         pass
                 time.sleep(10)
