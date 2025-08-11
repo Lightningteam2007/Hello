@@ -22,6 +22,7 @@ jobs:
       - name: نصب و تنظیم پیش‌نیازها
         run: |
           sudo apt-get update -y
+          apt-cache policy chromium-browser
           sudo apt-get install -y \
             ffmpeg \
             libgl1 \
@@ -30,7 +31,13 @@ jobs:
             libegl1 \
             libxcb-xinerama0 \
             chromium-browser
+          ls -l /usr/bin/chromium-browser || (echo "Chromium not found" && exit 1)
+          # حذف فایل یا لینک موجود
+          sudo rm -f /usr/bin/google-chrome
           sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
+          ls -l /usr/bin/google-chrome || (echo "Failed to create google-chrome symlink" && exit 1)
+          sudo chmod +x /usr/bin/google-chrome
+          /usr/bin/google-chrome --version || (echo "google-chrome is not executable" && exit 1)
           sudo rm -rf /var/lib/apt/lists/*
 
       - name: نصب وابستگی‌های پایتون
