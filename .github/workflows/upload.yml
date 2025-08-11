@@ -22,39 +22,44 @@ jobs:
       - name: نصب و تنظیم پیش‌نیازها
         run: |
           sudo apt-get update -y
-          apt-cache policy chromium-browser
           sudo apt-get install -y \
             ffmpeg \
             libgl1 \
-            libglx0 \
-            libopengl0 \
-            libegl1 \
-            libxcb-xinerama0 \
-            chromium-browser
-          ls -l /usr/bin/chromium-browser || (echo "Chromium not found" && exit 1)
-          sudo rm -f /usr/bin/google-chrome
+            libglib2.0-0 \
+            libnss3 \
+            libx11-6 \
+            libxcb1 \
+            libxcomposite1 \
+            libxcursor1 \
+            libxdamage1 \
+            libxext6 \
+            libxfixes3 \
+            libxi6 \
+            libxrandr2 \
+            libxrender1 \
+            libxtst6 \
+            xvfb \
+            chromium-browser \
+            chromium-chromedriver
+
           sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
-          ls -l /usr/bin/google-chrome || (echo "Failed to create google-chrome symlink" && exit 1)
           sudo chmod +x /usr/bin/google-chrome
-          /usr/bin/google-chrome --version || (echo "google-chrome is not executable" && exit 1)
-          sudo rm -rf /var/lib/apt/lists/*
+          google-chrome --version
+          which google-chrome
 
       - name: نصب وابستگی‌های پایتون
         run: |
           python -m pip install --upgrade pip
           pip install --force-reinstall -r requirements.txt
-          pip install yt-dlp==2023.11.16 webdriver-manager==4.0.2
-          yt-dlp --version || (echo "Failed to install yt-dlp" && exit 1)
+          pip install webdriver-manager==4.0.2 selenium==4.13.0
 
       - name: بررسی نسخه‌ها
         run: |
           echo "### نسخه‌های نصب شده ###"
           ffmpeg -version | head -n 1
-          yt-dlp --version || echo "yt-dlp not installed"
-          python -c "import PIL; print(f'Pillow: {PIL.__version__}')"
-          python -c "import moviepy; print(f'MoviePy: {moviepy.__version__}')"
-          chromium-browser --version || echo "Chromium not found"
-          echo "Google Chrome symlink: $(readlink -f /usr/bin/google-chrome || echo 'Not found')"
+          python -c "import selenium; print(f'Selenium: {selenium.__version__}')"
+          chromium-browser --version
+          google-chrome --version
 
       - name: اجرای اسکریپت اصلی
         env:
@@ -64,9 +69,9 @@ jobs:
         run: |
           mkdir -p downloaded_videos processed_videos
           Xvfb :99 -screen 0 1920x1080x24 > xvfb.log 2>&1 &
-          sleep 5
+          sleep 10
           export DISPLAY=:99
-          timeout 45m python main.py || (echo "خطا در اجرای اسکریپت" && cat xvfb.log && cat chromedriver.log && exit 1)
+          timeout 45m python main.py || (echo "خطا در اجرای اسکریپت" && exit 1)
 
       - name: ذخیره لاگ‌های خطا
         if: always()
@@ -76,6 +81,5 @@ jobs:
           path: |
             *.log
             *.html
-            error_attempt_*.png
-            upload_page_*.png
+            *.png
             chromedriver.log
