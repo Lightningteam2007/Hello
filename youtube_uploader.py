@@ -14,19 +14,26 @@ from config import Config
 class YouTubeUploader:
     @staticmethod
     def load_cookies(driver):
+        if not Config.YT_COOKIES:
+            print("⚠️ No cookies provided in YT_COOKIES!")
+            return False
+
         try:
             cookies = json.loads(Config.YT_COOKIES)
             driver.get("https://www.youtube.com")
             time.sleep(5)
             
-            # Clear existing cookies
             driver.delete_all_cookies()
             time.sleep(2)
             
             for cookie in cookies:
                 if 'expiry' in cookie:
                     del cookie['expiry']
-                driver.add_cookie(cookie)
+                try:
+                    driver.add_cookie(cookie)
+                except Exception as e:
+                    print(f"⚠️ Could not add cookie: {e}")
+                    continue
             
             driver.refresh()
             time.sleep(5)
@@ -43,20 +50,12 @@ class YouTubeUploader:
             driver.get("https://www.youtube.com")
             time.sleep(5)
             
-            # Multiple ways to check login status
-            logged_in = False
-            try:
-                if driver.find_elements(By.CSS_SELECTOR, "img#img"):
-                    logged_in = True
-            except:
-                pass
-                
-            if not logged_in:
-                try:
-                    if driver.find_elements(By.XPATH, "//a[contains(@href, 'account')]"):
-                        logged_in = True
-                except:
-                    pass
+            # Multiple login check methods
+            logged_in = any([
+                driver.find_elements(By.CSS_SELECTOR, "img#img"),
+                driver.find_elements(By.XPATH, "//a[contains(@href, 'account')]"),
+                driver.find_elements(By.CSS_SELECTOR, "yt-img-shadow.ytd-topbar-menu-button-renderer")
+            ])
             
             if logged_in:
                 print("✅ User is logged in.")
@@ -76,7 +75,7 @@ class YouTubeUploader:
             print(f"\n🔄 Attempt {attempt}/{Config.MAX_RETRIES}")
             driver = None
             try:
-                # Chrome options setup
+                # Chrome settings
                 options = Options()
                 options.add_argument("--no-sandbox")
                 options.add_argument("--disable-dev-shm-usage")
@@ -87,7 +86,7 @@ class YouTubeUploader:
                 options.add_argument("--disable-blink-features=AutomationControlled")
                 options.add_argument("--disable-infobars")
                 options.add_argument("--start-maximized")
-                options.add_argument(f"user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{Config.CHROME_VERSION} Safari/537.36")
+                options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 options.add_experimental_option("excludeSwitches", ["enable-automation"])
                 options.add_experimental_option("useAutomationExtension", False)
                 options.binary_location = "/usr/bin/chromium-browser"
@@ -106,102 +105,76 @@ class YouTubeUploader:
                 driver.get(Config.YT_UPLOAD_URL)
                 time.sleep(15)
 
-                # Debug: Save page source
+                # Save debug info
                 with open(f"upload_page_{attempt}.html", "w", encoding="utf-8") as f:
                     f.write(driver.page_source)
                 driver.save_screenshot(f"upload_page_{attempt}.png")
 
-                # File upload with multiple methods
+                # Upload file (multiple methods)
                 print("📤 Uploading video file...")
-                uploaded = False
                 try:
-                    # Method 1: Create input element with JavaScript
+                    # Method 1: JavaScript injection
                     driver.execute_script('''
                         const input = document.createElement('input');
                         input.type = 'file';
-                        input.id = 'custom-upload-input';
-                        input.style.display = 'block';
-                        input.style.visibility = 'visible';
-                        input.style.position = 'absolute';
+                        input.id = 'yt-uploader-file-input';
+                        input.style.position = 'fixed';
                         input.style.top = '0';
                         input.style.left = '0';
                         input.style.width = '100%';
                         input.style.height = '100%';
+                        input.style.opacity = '0';
                         document.body.appendChild(input);
                     ''')
                     file_input = WebDriverWait(driver, Config.WEBDRIVER_TIMEOUT).until(
-                        EC.presence_of_element_located((By.ID, 'custom-upload-input'))
+                        EC.presence_of_element_located((By.ID, 'yt-uploader-file-input'))
                     )
                     file_input.send_keys(os.path.abspath(video_path))
-                    uploaded = True
                 except Exception as e:
-                    print(f"⚠️ JavaScript upload method failed: {e}")
-                    try:
-                        # Method 2: Standard file input
-                        file_input = WebDriverWait(driver, Config.WEBDRIVER_TIMEOUT).until(
-                            EC.presence_of_element_located((By.XPATH, '//input[@type="file"]'))
-                        )
-                        file_input.send_keys(os.path.abspath(video_path))
-                        uploaded = True
-                    except Exception as e:
-                        print(f"⚠️ Standard upload method failed: {e}")
-                        raise Exception("All upload methods failed")
+                    print(f"⚠️ JavaScript upload failed: {e}")
+                    # Fallback to standard method
+                    file_input = WebDriverWait(driver, Config.WEBDRIVER_TIMEOUT).until(
+                        EC.presence_of_element_located((By.XPATH, '//input[@type="file"]'))
+                    )
+                    file_input.send_keys(os.path.abspath(video_path))
 
-                if uploaded:
-                    print("✅ Video file uploaded.")
-                    time.sleep(10)
+                print("✅ Video file uploaded.")
+                time.sleep(10)
 
-                    # Set title
-                    print("✏️ Setting title...")
-                    try:
-                        title_field = WebDriverWait(driver, Config.WEBDRIVER_TIMEOUT).until(
-                            EC.element_to_be_clickable((By.XPATH, '//*[contains(@aria-label, "Title")]'))
-                        )
-                        title_field.clear()
-                        title_field.send_keys(title)
-                        print("✅ Title set successfully")
-                    except Exception as e:
-                        print(f"⚠️ Could not set title: {e}")
-                        raise
+                # Set title
+                print("✏️ Setting title...")
+                title_field = WebDriverWait(driver, Config.WEBDRIVER_TIMEOUT).until(
+                    EC.element_to_be_clickable((By.XPATH, '//*[contains(@aria-label, "Title")]'))
+                )
+                title_field.clear()
+                title_field.send_keys(title)
 
-                    # Set description
-                    print("📝 Setting description...")
-                    try:
-                        desc_field = WebDriverWait(driver, Config.WEBDRIVER_TIMEOUT).until(
-                            EC.element_to_be_clickable((By.XPATH, '//*[contains(@aria-label, "Description")]'))
-                        )
-                        desc_field.clear()
-                        desc_field.send_keys(description)
-                        print("✅ Description set successfully")
-                    except Exception as e:
-                        print(f"⚠️ Could not set description: {e}")
+                # Set description
+                print("📝 Setting description...")
+                desc_field = WebDriverWait(driver, Config.WEBDRIVER_TIMEOUT).until(
+                    EC.element_to_be_clickable((By.XPATH, '//*[contains(@aria-label, "Description")]'))
+                )
+                desc_field.clear()
+                desc_field.send_keys(description)
 
-                    # Click Next buttons (3 times)
-                    for i in range(3):
-                        print(f"⏭️ Clicking Next ({i+1}/3)...")
-                        try:
-                            next_btn = WebDriverWait(driver, Config.WEBDRIVER_TIMEOUT).until(
-                                EC.element_to_be_clickable((By.XPATH, "//div[contains(@id, 'next-button')]"))
-                            )
-                            next_btn.click()
-                            time.sleep(5)
-                        except Exception as e:
-                            print(f"⚠️ Could not click Next button ({i+1}/3): {e}")
-                            raise
+                # Click Next buttons (3 times)
+                for i in range(3):
+                    print(f"⏭️ Clicking Next ({i+1}/3)...")
+                    next_btn = WebDriverWait(driver, Config.WEBDRIVER_TIMEOUT).until(
+                        EC.element_to_be_clickable((By.XPATH, "//div[contains(@id, 'next-button')]"))
+                    )
+                    next_btn.click()
+                    time.sleep(5)
 
-                    # Publish video
-                    print("🚀 Publishing video...")
-                    try:
-                        publish_btn = WebDriverWait(driver, Config.WEBDRIVER_TIMEOUT).until(
-                            EC.element_to_be_clickable((By.XPATH, "//div[contains(@id, 'done-button')]"))
-                        )
-                        publish_btn.click()
-                        time.sleep(15)
-                        print("✅ Video published successfully!")
-                        return True
-                    except Exception as e:
-                        print(f"❌ Could not publish video: {e}")
-                        raise
+                # Publish video
+                print("🚀 Publishing video...")
+                publish_btn = WebDriverWait(driver, Config.WEBDRIVER_TIMEOUT).until(
+                    EC.element_to_be_clickable((By.XPATH, "//div[contains(@id, 'done-button')]"))
+                )
+                publish_btn.click()
+                time.sleep(15)
+                print("✅ Video published successfully!")
+                return True
 
             except Exception as e:
                 print(f"❌ Attempt {attempt} failed: {e}")
