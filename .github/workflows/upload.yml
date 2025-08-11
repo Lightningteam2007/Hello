@@ -7,7 +7,7 @@ on:
 
 jobs:
   upload:
-    runs-on: ubuntu-22.04  # استفاده از Ubuntu 22.04 برای سازگاری
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
 
     steps:
@@ -22,8 +22,6 @@ jobs:
       - name: نصب و تنظیم پیش‌نیازها
         run: |
           sudo apt-get update -y
-          # بررسی مخازن
-          apt-cache policy chromium-browser chromium-chromedriver
           sudo apt-get install -y \
             ffmpeg \
             libgl1 \
@@ -31,19 +29,15 @@ jobs:
             libopengl0 \
             libegl1 \
             libxcb-xinerama0 \
-            chromium-browser \
-            chromium-chromedriver
-          ls -l /usr/lib/chromium-browser/chromedriver || (echo "Chromedriver not found" && exit 1)
-          sudo ln -s /usr/lib/chromium-browser/chromedriver /usr/bin/chromedriver
-          ls -l /usr/bin/chromedriver || (echo "Failed to create chromedriver symlink" && exit 1)
-          sudo chmod +x /usr/bin/chromedriver
+            chromium-browser
+          sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
           sudo rm -rf /var/lib/apt/lists/*
 
       - name: نصب وابستگی‌های پایتون
         run: |
           python -m pip install --upgrade pip
           pip install --force-reinstall -r requirements.txt
-          pip install yt-dlp==2023.11.16
+          pip install yt-dlp==2023.11.16 webdriver-manager==4.0.2
           yt-dlp --version || (echo "Failed to install yt-dlp" && exit 1)
 
       - name: بررسی نسخه‌ها
@@ -54,7 +48,6 @@ jobs:
           python -c "import PIL; print(f'Pillow: {PIL.__version__}')"
           python -c "import moviepy; print(f'MoviePy: {moviepy.__version__}')"
           chromium-browser --version || echo "Chromium not found"
-          chromedriver --version || echo "Chromedriver not found"
           echo "Google Chrome symlink: $(readlink -f /usr/bin/google-chrome || echo 'Not found')"
 
       - name: اجرای اسکریپت اصلی
@@ -67,8 +60,6 @@ jobs:
           Xvfb :99 -screen 0 1920x1080x24 > xvfb.log 2>&1 &
           sleep 2
           export DISPLAY=:99
-          ls -l /usr/bin/chromedriver || (echo "Chromedriver not found in /usr/bin" && exit 1)
-          chromedriver --version || (echo "Chromedriver version check failed" && exit 1)
           timeout 45m python main.py || (echo "خطا در اجرای اسکریپت" && cat xvfb.log && cat chromedriver.log && exit 1)
 
       - name: ذخیره لاگ‌های خطا
