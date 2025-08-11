@@ -67,6 +67,9 @@ class YouTubeUploader:
                 options.add_argument("--disable-gpu")
                 options.add_argument("--disable-extensions")
                 options.add_argument("--remote-debugging-port=9222")
+                options.add_argument("--disable-blink-features=AutomationControlled")
+                options.add_argument("--disable-infobars")
+                options.add_argument("--start-maximized")
                 options.binary_location = "/usr/bin/chromium-browser"
 
                 # تنظیم سرویس chromedriver
@@ -76,7 +79,17 @@ class YouTubeUploader:
                 )
 
                 # ایجاد درایور
-                driver = webdriver.Chrome(options=options, service=service)
+                try:
+                    driver = webdriver.Chrome(options=options, service=service)
+                    driver.execute_script(
+                        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+                    )
+                except Exception as e:
+                    print(f"❌ Failed to initialize Chrome: {str(e)}")
+                    with open("webdriver_error.log", "w") as f:
+                        f.write(f"Driver init error: {str(e)}\n")
+                    raise
+
                 driver.maximize_window()
 
                 # بارگیری کوکی‌ها و بررسی لاگین
