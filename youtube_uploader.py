@@ -4,6 +4,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager  # اضافه شده
 import time
 import json
 import os
@@ -72,11 +73,8 @@ class YouTubeUploader:
                 options.add_argument("--start-maximized")
                 options.binary_location = "/usr/bin/chromium-browser"
 
-                # تنظیم سرویس chromedriver
-                service = Service(
-                    executable_path="/usr/bin/chromedriver",
-                    service_args=["--verbose", "--log-path=chromedriver.log"]
-                )
+                # استفاده از webdriver-manager برای مدیریت Chromedriver
+                service = Service(ChromeDriverManager().install())
 
                 # ایجاد درایور
                 try:
