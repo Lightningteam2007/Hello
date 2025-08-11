@@ -15,9 +15,16 @@ def cleanup_temp_files():
             shutil.rmtree("downloaded_videos")
         if os.path.exists(Config.OUTPUT_DIR):
             shutil.rmtree(Config.OUTPUT_DIR)
+        # پاکسازی فایل‌های موقت دیگر
+        for file in ["chromedriver.log", "webdriver_error.log", "error.log"]:
+            if os.path.exists(file):
+                os.remove(file)
         print("♻️ فایل‌های موقت با موفقیت پاکسازی شدند")
     except Exception as e:
         print(f"⚠️ خطا در پاکسازی فایل‌های موقت: {e}")
+        with open("cleanup_error.log", "w") as f:
+            f.write(f"Cleanup error: {str(e)}\n")
+            f.write(traceback.format_exc())
 
 def main():
     print("🚀 شروع برنامه آپلود خودکار یوتیوب شورت...")
@@ -33,7 +40,7 @@ def main():
                     print("❌ ویدیویی یافت نشد. خروج...")
                     return
                 
-                # 2. دانلود ویدیو با تأخیر قبل از پردازش
+                # 2. دانلود ویدیو
                 print(f"📥 در حال دانلود ویدیو از تلگرام...")
                 video_path = TelegramScraper.download_video(video_info['url'])
                 if not video_path:
@@ -66,10 +73,22 @@ def main():
             except Exception as e:
                 print(f"❌ خطای غیرمنتظره در تلاش {attempt}: {str(e)}")
                 print(traceback.format_exc())
+                with open("error.log", "a") as f:
+                    f.write(f"Attempt {attempt} error: {str(e)}\n")
+                    f.write(traceback.format_exc())
                 time.sleep(Config.DELAY_BETWEEN_ATTEMPTS)
         
         else:
             print("❌ همه تلاش‌ها ناموفق بودند!")
+            with open("error.log", "a") as f:
+                f.write("All attempts failed\n")
+    
+    except Exception as e:
+        print(f"❌ خطای اصلی در اجرای برنامه: {str(e)}")
+        print(traceback.format_exc())
+        with open("error.log", "w") as f:
+            f.write(f"Main error: {str(e)}\n")
+            f.write(traceback.format_exc())
     
     finally:
         cleanup_temp_files()
