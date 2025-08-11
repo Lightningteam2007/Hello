@@ -8,7 +8,7 @@ on:
 jobs:
   upload:
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +19,7 @@ jobs:
           python-version: "3.10"
           cache: 'pip'
 
-      - name: نصب و تنظیم پیش‌نیازهای سیستم
+      - name: نصب و تنظیم پیش‌نیازها
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \
@@ -42,7 +42,7 @@ jobs:
             chromium-browser \
             chromium-chromedriver
 
-          # ایجاد مسیرهای مورد نیاز برای chromium
+          # ایجاد مسیرهای مورد نیاز
           sudo mkdir -p /home/runner/snap/chromium/common/.cache
           sudo touch /home/runner/snap/chromium/common/.cache/desktop-runtime-date
           sudo chmod -R 777 /home/runner/snap
@@ -51,12 +51,6 @@ jobs:
           sudo rm -f /usr/bin/google-chrome || true
           sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
           sudo chmod +x /usr/bin/google-chrome
-
-          # بررسی نسخه‌ها
-          echo "### نسخه‌های نصب شده ###"
-          chromium-browser --version
-          google-chrome --version
-          chromedriver --version
 
       - name: نصب وابستگی‌های پایتون
         run: |
@@ -72,9 +66,9 @@ jobs:
         run: |
           mkdir -p downloaded_videos processed_videos
           Xvfb :99 -screen 0 1920x1080x24 > xvfb.log 2>&1 &
-          sleep 20
+          sleep 30
           export DISPLAY=:99
-          timeout 75m python main.py || (echo "خطا در اجرای اسکریپت" && exit 1)
+          timeout 110m python main.py || (echo "خطا در اجرای اسکریپت" && exit 1)
 
       - name: ذخیره لاگ‌های دیباگ
         if: always()
