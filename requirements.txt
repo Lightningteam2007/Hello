@@ -9,3 +9,4 @@ ffmpeg-python==0.2.0
 pillow==10.1.0  # نسخه پایدار جدید
 opencv-python-headless==4.8.1.78
 numpy==1.26.4
+webdriver-manager==4.0.2
